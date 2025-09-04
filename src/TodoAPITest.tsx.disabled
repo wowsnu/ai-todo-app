@@ -1,0 +1,137 @@
+import React, { useState, useEffect } from 'react';
+import { apiService } from './services/api';
+import { Todo, toApiData, createTodo } from './types/todo';
+
+const TodoAPITest = () => {
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+
+  useEffect(() => {
+    loadTodos();
+  }, []);
+
+  const loadTodos = async () => {
+    try {
+      setLoading(true);
+      const data = await apiService.getTodos();
+      setTodos(data);
+    } catch (error) {
+      console.error('Failed to load todos:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addTodo = async () => {
+    if (!newTitle.trim()) return;
+    
+    try {
+      const createdTodo = await apiService.createTodo({
+        title: newTitle.trim()
+      });
+      
+      setTodos(prev => [...prev, createdTodo]);
+      setNewTitle('');
+    } catch (error) {
+      console.error('Failed to add todo:', error);
+    }
+  };
+
+  const deleteTodo = async (id: string) => {
+    try {
+      await apiService.deleteTodo(id);
+      setTodos(prev => prev.filter(todo => todo.id !== id));
+    } catch (error) {
+      console.error('Failed to delete todo:', error);
+    }
+  };
+
+  const updateProgress = async (todo: Todo, progress: number) => {
+    console.log('Updating progress:', todo.id, progress);
+    try {
+      await apiService.updateTodo(todo.id, { progress });
+      
+      // 로컬 상태 업데이트 (Todo 인터페이스 속성 변경)
+      const updatedTodo = createTodo({
+        ...toApiData(todo),
+        progress
+      });
+      
+      setTodos(prev => prev.map(t => 
+        t.id === todo.id ? updatedTodo : t
+      ));
+      console.log('Progress updated successfully');
+    } catch (error) {
+      console.error('Failed to update progress:', error);
+    }
+  };
+
+  return (
+    <div style={{ padding: '20px', maxWidth: '600px' }}>
+      <h2>🎯 Todo API Test - Clean Architecture</h2>
+      <p style={{ color: '#666', marginBottom: '20px' }}>
+        ✨ TodoItem 클래스 기반 | 🔄 API 연동 | 💾 SQLite 저장 | 
+        📊 계산된 속성(completed, status)
+      </p>
+      
+      <div style={{ marginBottom: '20px' }}>
+        <input
+          type="text"
+          value={newTitle}
+          onChange={(e) => setNewTitle(e.target.value)}
+          placeholder="새 할일 제목"
+          style={{ padding: '8px', marginRight: '10px', width: '300px' }}
+        />
+        <button onClick={addTodo}>추가</button>
+      </div>
+
+      {loading ? (
+        <p>로딩중...</p>
+      ) : (
+        <div>
+          <h3>할일 목록 ({todos.length}개)</h3>
+          {todos.map((todo) => (
+            <div key={todo.id} style={{ 
+              border: '1px solid #ddd', 
+              padding: '10px', 
+              margin: '10px 0',
+              borderRadius: '5px'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <strong>{todo.title}</strong>
+                  <br />
+                  <small>
+                    시간: {todo.time} | 진행률: {todo.progress}% | 
+                    상태: {todo.status} | 완료: {todo.completed ? '✅' : '❌'}
+                  </small>
+                  <br />
+                  <small style={{ color: '#666' }}>
+                    ID: {todo.id}
+                  </small>
+                </div>
+                <div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={todo.progress}
+                    onChange={(e) => {
+                      console.log('Slider moved:', e.target.value);
+                      updateProgress(todo, parseInt(e.target.value));
+                    }}
+                    style={{ marginRight: '10px', width: '150px' }}
+                  />
+                  <button onClick={() => deleteTodo(todo.id)}>삭제</button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default TodoAPITest;

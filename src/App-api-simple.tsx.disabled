@@ -1,0 +1,243 @@
+import React, { useState, useEffect } from 'react';
+import './App.css';
+import { apiService } from './services/api';
+import { Todo, createTodo, toApiData } from './types/todo';
+
+function App() {
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [inputText, setInputText] = useState('');
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+
+  // Load todos on component mount
+  useEffect(() => {
+    loadTodos();
+  }, []);
+
+  const loadTodos = async () => {
+    try {
+      setLoading(true);
+      const data = await apiService.getTodos();
+      setTodos(data);
+    } catch (error) {
+      console.error('Failed to load todos:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addTodo = async () => {
+    if (!inputText.trim()) return;
+    
+    try {
+      const newTodo = await apiService.createTodo({
+        title: inputText.trim(),
+        deadline: selectedDate || ''
+      });
+      setTodos(prev => [...prev, newTodo]);
+      setInputText('');
+      setSelectedDate(null);
+    } catch (error) {
+      console.error('Failed to add todo:', error);
+    }
+  };
+
+  const updateProgress = async (todo: Todo, progress: number) => {
+    try {
+      await apiService.updateTodo(todo.id, { progress });
+      const updatedTodo = createTodo({
+        ...toApiData(todo),
+        progress
+      });
+      setTodos(prev => prev.map(t => 
+        t.id === todo.id ? updatedTodo : t
+      ));
+    } catch (error) {
+      console.error('Failed to update progress:', error);
+    }
+  };
+
+  const deleteTodo = async (id: string) => {
+    try {
+      await apiService.deleteTodo(id);
+      setTodos(prev => prev.filter(todo => todo.id !== id));
+    } catch (error) {
+      console.error('Failed to delete todo:', error);
+    }
+  };
+
+  const getDeadlineUrgency = (deadline: string) => {
+    if (!deadline) return 'normal';
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const deadlineDate = new Date(deadline);
+    deadlineDate.setHours(0, 0, 0, 0);
+    const diffTime = deadlineDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays <= 0) return 'urgent';
+    if (diffDays <= 1) return 'warning';
+    return 'normal';
+  };
+
+  if (loading) {
+    return (
+      <div className="app">
+        <div style={{ textAlign: 'center', padding: '50px' }}>
+          <h2>로딩중...</h2>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="app">
+      <h1>🎯 AI Todo App</h1>
+      
+      <div className="three-column-layout">
+        {/* Left Column - Daily Tasks */}
+        <div className="left-column">
+          <h2>📅 오늘의 할일</h2>
+          <div className="daily-tasks">
+            {todos
+              .filter(todo => {
+                const today = new Date().toISOString().split('T')[0];
+                return todo.deadline === today || !todo.deadline;
+              })
+              .map((todo) => (
+                <div 
+                  key={todo.id} 
+                  className={`daily-task ${getDeadlineUrgency(todo.deadline)}`}
+                >
+                  <div className="task-header">
+                    <span className="task-time">{todo.time}</span>
+                    <span className="task-title">{todo.title}</span>
+                  </div>
+                  <div className="task-progress">
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={todo.progress}
+                      onChange={(e) => updateProgress(todo, parseInt(e.target.value))}
+                      className="progress-slider"
+                    />
+                    <span className="progress-value">{todo.progress}%</span>
+                  </div>
+                  <div className="task-status">
+                    상태: {todo.status} | 완료: {todo.completed ? '✅' : '❌'}
+                  </div>
+                </div>
+              ))
+            }
+          </div>
+        </div>
+
+        {/* Center Column - Main Todo List */}
+        <div className="center-column">
+          <h2>📝 전체 할일</h2>
+          
+          {/* Add Todo Form */}
+          <div className="add-todo-form">
+            <input
+              type="text"
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              placeholder="새 할일을 입력하세요"
+              onKeyPress={(e) => e.key === 'Enter' && addTodo()}
+              className="todo-input"
+            />
+            <input
+              type="date"
+              value={selectedDate || ''}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="date-input"
+            />
+            <button onClick={addTodo} className="add-button">
+              추가
+            </button>
+          </div>
+
+          {/* Todo List */}
+          <div className="todo-list">
+            {todos.map((todo) => (
+              <div key={todo.id} className={`todo-item ${todo.status}`}>
+                <div className="todo-content">
+                  <h3>{todo.title}</h3>
+                  {todo.description && <p>{todo.description}</p>}
+                  {todo.location && <p>📍 {todo.location}</p>}
+                  <div className="todo-meta">
+                    <span>시간: {todo.time}</span>
+                    {todo.deadline && (
+                      <span className={`deadline ${getDeadlineUrgency(todo.deadline)}`}>
+                        마감: {todo.deadline}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="todo-controls">
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={todo.progress}
+                    onChange={(e) => updateProgress(todo, parseInt(e.target.value))}
+                    className="progress-slider"
+                  />
+                  <span className="progress-value">{todo.progress}%</span>
+                  <button 
+                    onClick={() => deleteTodo(todo.id)}
+                    className="delete-button"
+                  >
+                    삭제
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Right Column - Summary & Analytics */}
+        <div className="right-column">
+          <h2>📊 요약</h2>
+          <div className="summary-stats">
+            <div className="stat-item">
+              <span className="stat-label">총 할일</span>
+              <span className="stat-value">{todos.length}</span>
+            </div>
+            <div className="stat-item">
+              <span className="stat-label">완료됨</span>
+              <span className="stat-value">{todos.filter(t => t.completed).length}</span>
+            </div>
+            <div className="stat-item">
+              <span className="stat-label">진행률</span>
+              <span className="stat-value">
+                {todos.length > 0 
+                  ? Math.round((todos.filter(t => t.completed).length / todos.length) * 100)
+                  : 0}%
+              </span>
+            </div>
+          </div>
+          
+          <div className="progress-overview">
+            <h3>진행 상황</h3>
+            {todos.map((todo) => (
+              <div key={todo.id} className="progress-item">
+                <span className="progress-title">{todo.title}</span>
+                <div className="progress-bar">
+                  <div 
+                    className="progress-fill"
+                    style={{ width: `${todo.progress}%` }}
+                  ></div>
+                </div>
+                <span className="progress-percent">{todo.progress}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default App;

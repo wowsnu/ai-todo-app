@@ -1,0 +1,14 @@
+import React from 'react';
+import './App.css';
+import TodoAPITest from './TodoAPITest';
+
+function App() {
+  return (
+    <div className="app">
+      <h1>🚀 Todo App - API 연동 테스트</h1>
+      <TodoAPITest />
+    </div>
+  );
+}
+
+export default App;
