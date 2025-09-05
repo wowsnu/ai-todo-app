@@ -2415,21 +2415,21 @@ function App() {
                                 className={`difficulty-btn ${difficultyLevel === 'easy' ? 'active' : ''}`}
                                 onClick={() => setDifficultyLevel('easy')}
                               >
-                                <img src="/쉬는_fanda.png" alt="resting panda" className="panda-icon" /> 널널하게
+                                <img src="/쉬는_fanda.png" alt="resting panda" className="difficulty-panda-icon" /> 널널하게
                               </button>
                               <button
                                 type="button"
                                 className={`difficulty-btn ${difficultyLevel === 'normal' ? 'active' : ''}`}
                                 onClick={() => setDifficultyLevel('normal')}
                               >
-                                <img src="/보통fanda.png" alt="normal panda" className="panda-icon" /> 보통
+                                <img src="/보통fanda.png" alt="normal panda" className="difficulty-panda-icon" /> 보통
                               </button>
                               <button
                                 type="button"
                                 className={`difficulty-btn ${difficultyLevel === 'hard' ? 'active' : ''}`}
                                 onClick={() => setDifficultyLevel('hard')}
                               >
-                                <img src="/엄격한fanda.png" alt="strict panda" className="panda-icon" /> 빡세게
+                                <img src="/엄격한fanda.png" alt="strict panda" className="difficulty-panda-icon" /> 빡세게
                               </button>
                             </div>
                           </div>
