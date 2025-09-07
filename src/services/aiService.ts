@@ -1,5 +1,5 @@
 // OpenAI API 호출은 이제 백엔드에서 안전하게 처리됩니다
-const API_BASE_URL = 'http://localhost:3001/api';
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:3001/api';
 
 export interface SubtaskSuggestion {
   id: string;
