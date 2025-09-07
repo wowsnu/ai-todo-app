@@ -199,29 +199,6 @@ function App() {
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [aiRequirements, setAiRequirements] = useState(''); // 요구사항 입력
   const [difficultyLevel, setDifficultyLevel] = useState<'easy' | 'normal' | 'hard'>('normal'); // 난이도 선택
-  const [tempDailySummaries] = useState({
-    '2025-08-22': {
-      completedTasks: 5,
-      totalTasks: 5,
-      completionRate: 100,
-      badge: 'perfect',
-      mood: 'excellent'
-    },
-    '2025-08-23': {
-      completedTasks: 2,
-      totalTasks: 4,
-      completionRate: 50,
-      badge: 'progress',
-      mood: 'good'
-    },
-    '2025-08-24': {
-      completedTasks: 1,
-      totalTasks: 6,
-      completionRate: 17,
-      badge: 'start',
-      mood: 'challenging'
-    }
-  });
 
   // 선택된 날짜의 서브태스크들을 표시 (실제 일정)
   const getDailyTasks = () => {
@@ -1219,7 +1196,7 @@ function App() {
     if (!linkInput.trim() || !selectedTodo) return;
     
     // URL 유효성 검사
-    const urlPattern = /^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$/;
+    const urlPattern = /^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&//=]*)$/;
     if (urlPattern.test(linkInput)) {
       setUploadedLinks(prev => ({
         ...prev,
@@ -1237,7 +1214,7 @@ function App() {
     if (!selectedTodo) return;
     
     const pastedText = e.clipboardData.getData('text');
-    const urlPattern = /^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$/;
+    const urlPattern = /^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&//=]*)$/;
     
     if (urlPattern.test(pastedText)) {
       e.preventDefault();
@@ -1295,7 +1272,7 @@ function App() {
     // 텍스트 데이터가 있으면 URL인지 확인
     const draggedText = e.dataTransfer.getData('text/plain');
     if (draggedText && selectedTodo) {
-      const urlPattern = /^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$/;
+      const urlPattern = /^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&//=]*)$/;
       if (urlPattern.test(draggedText)) {
         setUploadedLinks(prev => ({
           ...prev,
