@@ -1442,7 +1442,7 @@ function AuthenticatedApp() {
         uploadedFiles[selectedTodo.id] || [],
         uploadedLinks[selectedTodo.id] || [],
         aiRequirements, // 사용자 요구사항
-        difficultyLevel // 난이도 설정
+        _difficultyLevel // 난이도 설정
       );
 
       setAnalysisResult(analysis);
