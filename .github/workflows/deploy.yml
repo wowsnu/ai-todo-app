@@ -67,8 +67,8 @@ jobs:
           
           # Install dependencies
           echo "📋 Installing dependencies..."
-          sudo npm install --only=production
-          cd server && sudo npm install --only=production && cd ..
+          sudo npm install
+          cd server && sudo npm install && cd ..
           
           # Build applications
           echo "🔨 Building applications..."
@@ -79,10 +79,12 @@ jobs:
           echo "🔧 Managing environment variables..."
           if [ ! -f server/.env ]; then
             echo "Creating new .env file..."
-            echo "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" | sudo tee server/.env
-            echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" | sudo tee -a server/.env
-            echo "PORT=2222" | sudo tee -a server/.env
-            echo "NODE_ENV=production" | sudo tee -a server/.env
+            sudo mkdir -p server
+            echo "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" | sudo tee server/.env > /dev/null
+            echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" | sudo tee -a server/.env > /dev/null
+            echo "PORT=2222" | sudo tee -a server/.env > /dev/null
+            echo "NODE_ENV=production" | sudo tee -a server/.env > /dev/null
+            echo "✅ Environment file created"
           else
             echo ".env file already exists, keeping existing configuration"
           fi
