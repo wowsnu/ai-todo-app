@@ -62,7 +62,7 @@ const apiTodoToUiTodo = (todoData: TodoData): Todo => {
 
 // 인증된 사용자를 위한 메인 애플리케이션 컴포넌트
 function AuthenticatedApp() {
-  const { user: _user, logout: _logout } = useAuth();
+  const { logout: _logout } = useAuth();
   const [todos, setTodos] = useState<Todo[]>([]);
   const [, setLoading] = useState(true);
   const [inputText, setInputText] = useState('');
@@ -71,26 +71,12 @@ function AuthenticatedApp() {
   const [showProgress, setShowProgress] = useState(false);
   
   // 투두비 지니 리워드 시스템
-  const [_showReward, setShowReward] = useState(false);
-  const [_rewardData, setRewardData] = useState<{
+  const [,] = useState(false);
+  const [,] = useState<{
     mainTask: Todo | null;
     completedSubtasks: number;
     totalSubtasks: number;
   }>({ mainTask: null, completedSubtasks: 0, totalSubtasks: 0 });
-  const [selectedReward, setSelectedReward] = useState('');
-
-  
-  // 보상 선택지
-  const rewardOptions = [
-    { id: 'coffee', emoji: '☕', text: '맛있는 커피 한 잔' },
-    { id: 'dessert', emoji: '🍰', text: '달콤한 디저트' },
-    { id: 'game', emoji: '🎮', text: '게임 시간' },
-    { id: 'bath', emoji: '🛀', text: '편안한 목욕' },
-    { id: 'movie', emoji: '🎬', text: '영화 한 편' },
-    { id: 'music', emoji: '🎵', text: '좋아하는 음악' },
-    { id: 'walk', emoji: '🚶', text: '산책하기' },
-    { id: 'custom', emoji: '✍️', text: '직접 입력하기' }
-  ];
   const [draggedItem, setDraggedItem] = useState<string | null>(null);
   
   // 왼쪽 패널 드래그 앤 드롭 상태
@@ -204,7 +190,7 @@ function AuthenticatedApp() {
   const [tempMemo, setTempMemo] = useState('');
   
   // 서브태스크 요구사항 편집 상태
-  const [_tempRequirements, setTempRequirements] = useState('');
+  const [, setTempRequirements] = useState('');
   
   // 통합 자료 업로드 상태 (파일 + 링크) - 메인태스크별로 분리
   const [isDragOver, setIsDragOver] = useState(false);
@@ -214,10 +200,10 @@ function AuthenticatedApp() {
   
   // AI 분석 관련 상태
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [_analysisResult, setAnalysisResult] = useState<TaskAnalysis | null>(null);
-  const [_analysisError, setAnalysisError] = useState<string | null>(null);
+  const [, setAnalysisResult] = useState<TaskAnalysis | null>(null);
+  const [, setAnalysisError] = useState<string | null>(null);
   const [aiRequirements, setAiRequirements] = useState(''); // 요구사항 입력
-  const [_difficultyLevel, _setDifficultyLevel] = useState<'easy' | 'normal' | 'hard'>('normal'); // 난이도 선택
+  const [, ] = useState<'easy' | 'normal' | 'hard'>('normal'); // 난이도 선택
 
   // 선택된 날짜의 서브태스크들을 표시 (실제 일정)
   const getDailyTasks = () => {
@@ -383,23 +369,7 @@ function AuthenticatedApp() {
     setTempRequirements(''); // 요구사항 임시 상태 초기화
   };
 
-  // 리워드 팝업 닫기
-  const closeRewardPopup = () => {
-    setShowReward(false);
-    setSelectedReward('');
-    setRewardData({ mainTask: null, completedSubtasks: 0, totalSubtasks: 0 });
-  };
 
-  // 보상 선택 및 확인
-  const _confirmReward = () => {
-    if (selectedReward) {
-      const selectedOption = rewardOptions.find(option => option.id === selectedReward);
-      if (selectedOption) {
-        alert(`🎉 축하합니다! "${selectedOption.text}"을(를) 즐겨보세요! 수고하셨습니다! 🎊`);
-      }
-      closeRewardPopup();
-    }
-  };
 
 
   // 뱃지 렌더링 함수
@@ -599,6 +569,7 @@ function AuthenticatedApp() {
     };
 
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 고아 서브태스크 정리 함수
@@ -967,34 +938,6 @@ function AuthenticatedApp() {
     }
   };
 
-  // 서브태스크 요구사항 저장 함수
-  const _saveSubtaskRequirements = async (id: string, requirements: string) => {
-    try {
-      // API를 통해 서브태스크 요구사항 저장
-      await apiService.updateTodo(id, { memo: requirements }); // 임시로 memo 필드 사용
-      
-      // 서브태스크 상태 업데이트
-      setSubtasks(prev => prev.map(subtask => {
-        if (subtask.id === id) {
-          return { ...subtask, requirements };
-        }
-        return subtask;
-      }));
-      
-      // 서브태스크 팝업 상태도 업데이트
-      if (subtaskPopup.subtask?.id === id) {
-        setSubtaskPopup(prev => ({
-          ...prev,
-          subtask: prev.subtask ? { ...prev.subtask, requirements } : null
-        }));
-      }
-      
-      console.log('서브태스크 요구사항이 저장되었습니다.');
-    } catch (error) {
-      console.error('Failed to update subtask requirements:', error);
-      alert('요구사항 저장에 실패했습니다.');
-    }
-  };
   
 
 
@@ -1442,7 +1385,7 @@ function AuthenticatedApp() {
         uploadedFiles[selectedTodo.id] || [],
         uploadedLinks[selectedTodo.id] || [],
         aiRequirements, // 사용자 요구사항
-        _difficultyLevel // 난이도 설정
+        'normal' // 난이도 설정
       );
 
       setAnalysisResult(analysis);
@@ -1821,7 +1764,7 @@ function AuthenticatedApp() {
       {/* 임시 로그아웃 버튼 (데모용) */}
       <div style={{position: 'fixed', top: '10px', right: '10px', zIndex: 1000}}>
         <button 
-          onClick={logout}
+          onClick={_logout}
           style={{
             padding: '8px 16px',
             background: 'rgba(255, 255, 255, 0.9)',
@@ -2798,7 +2741,7 @@ function AuthenticatedApp() {
 
 // 인증 상태에 따라 다른 화면을 보여주는 컴포넌트
 function MainApp() {
-  const { user, isLoading, login, logout: _logout } = useAuth();
+  const { user, isLoading, login } = useAuth();
 
   const handleLoginSuccess = (data: any) => {
     console.log('Login successful:', data);
