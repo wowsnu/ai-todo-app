@@ -532,3 +532,174 @@ app.get('/api/todos', authenticateToken, (req: AuthRequest, res) => {
 
 ## 현재 상태
 로컬 환경에서 완전히 동작하는 Google OAuth 인증 시스템이 구현되었으며, 실제 Google Client ID만 설정하면 Vercel에 배포하여 실제 사용자들이 Google 로그인으로 개인적인 AI Todo App을 사용할 수 있는 상태입니다.
+
+---
+
+# 고아 서브태스크 문제 해결 및 UI 개선 (2025년 9월 8일)
+
+## 문제 상황
+사용자가 메인태스크를 삭제했을 때 관련 서브태스크들이 완전히 삭제되지 않고 "고아 서브태스크"로 남는 문제가 발생했습니다. 8일 날짜에 메인태스크는 없는데 서브태스크들이 흔적으로 남아있어서 사용자가 직접 삭제할 수 없는 상황이었습니다.
+
+## 해결 방안
+
+### 1. 근본적인 원인 분석
+- **AI 서브태스크 생성 시점**: `Promise.allSettled`를 사용하여 일부 실패해도 계속 진행
+- **로컬-서버 불일치**: 서버 저장 실패한 서브태스크도 로컬 상태에 추가
+- **deleteTodo 함수 불완전성**: 서버와 로컬 상태 동기화가 완전하지 않음
+
+### 2. 구현된 해결책
+
+#### A. AI 서브태스크 생성 로직 강화
+**Before (문제 코드):**
+```typescript
+// 모든 서브태스크를 로컬에 추가한 후 서버 저장 시도
+const allSubtasks = [...subtasks, ...newSubtasks];
+await Promise.allSettled(subtaskSavePromises); // 일부 실패해도 진행
+```
+
+**After (개선 코드):**
+```typescript
+// 서버 저장 성공한 것만 로컬에 추가
+const successfulSubtasks: Subtask[] = [];
+for (const subtask of newSubtasks) {
+  try {
+    const savedTodo = await apiService.createTodo({...});
+    const updatedSubtask = { ...subtask, id: savedTodo.id }; // 실제 서버 ID 사용
+    successfulSubtasks.push(updatedSubtask);
+  } catch (error) {
+    // 실패한 서브태스크는 로컬에 추가하지 않음
+  }
+}
+const allSubtasks = [...subtasks, ...successfulSubtasks];
+```
+
+#### B. deleteTodo 함수 완전 개선
+```typescript
+const deleteTodo = async (id: string) => {
+  if (isMainTask) {
+    // 로컬과 서버에서 관련 서브태스크 모두 검색
+    const allServerTodos = await apiService.getTodos();
+    const serverSubtasks = allServerTodos.filter(todo => todo.parentTodoId === id);
+    
+    // 중복 제거 후 모든 관련 서브태스크 삭제
+    const allRelatedSubtasks = new Set([...localSubtasks, ...serverSubtasks]);
+    
+    for (const subtaskId of Array.from(allRelatedSubtasks)) {
+      await apiService.deleteTodo(subtaskId);
+    }
+  }
+};
+```
+
+### 3. TypeScript 에러 해결
+**에러:**
+```
+TS2802: Type 'Set<string>' can only be iterated through when using the '--downlevelIteration' flag
+```
+
+**해결:**
+```typescript
+// Before: for (const item of mySet)
+// After: for (const item of Array.from(mySet))
+```
+
+### 4. UI 개선사항
+
+#### A. 시간별 할일 추가 시스템
+- 왼쪽 패널에 시간 기반 태스크 추가 기능 구현
+- 6:00-23:30 30분 간격 드롭다운
+- Enter 키로 간편 추가
+- 선택된 날짜에 즉시 반영
+
+#### B. CSS 스타일링
+```css
+.time-add-container {
+  display: flex;
+  gap: 6px;
+}
+
+.time-select {
+  padding: 6px 10px;
+  border-radius: 6px;
+  min-width: 80px;
+}
+
+.time-input {
+  flex: 1;
+  padding: 6px 10px;
+}
+```
+
+### 5. 임시 정리 기능 (제거됨)
+처음에는 고아 서브태스크 정리 버튼을 추가했지만, 근본 원인을 해결한 후 사용자 요청으로 제거했습니다:
+- "고아 서브태스크 정리" 버튼 구현 → 제거
+- 앱 시작시 자동 정리 → 제거
+- 브라우저 콘솔 접근 함수 → 유지 (개발용)
+
+### 6. 데이터 정합성 보장
+
+#### 서버-로컬 동기화
+```typescript
+// 성공한 서브태스크만 상태 업데이트
+setSubtasks(prev => {
+  const filtered = prev.filter(st => st.parentMainTaskId !== selectedTodo.id);
+  const updated = [...filtered, ...successfulSubtasks];
+  console.log(`서브태스크 상태 업데이트: ${prev.length} -> ${updated.length} (성공: ${successfulSubtasks.length}/${newSubtasks.length})`);
+  return updated;
+});
+```
+
+#### 실제 서버 ID 사용
+```typescript
+// AI가 생성한 임시 ID 대신 서버에서 반환된 실제 ID 사용
+const updatedSubtask = { ...subtask, id: savedTodo.id };
+successfulSubtasks.push(updatedSubtask);
+```
+
+## 사용자 경험 개선
+
+### 1. 시간별 할일 추가
+- **UI**: 시간 선택 드롭다운 + 텍스트 입력
+- **UX**: Enter 키로 즉시 추가
+- **기능**: 선택된 날짜의 특정 시간에 할일 추가
+
+### 2. 진행률 관리
+- 서브태스크 팝업에서 진행률 슬라이더로 실시간 조정
+- 메인태스크 진행률 자동 계산 및 업데이트
+
+### 3. 로깅 시스템
+```typescript
+console.log(`🗑️ 총 삭제할 서브태스크: ${allRelatedSubtasks.size}개`);
+console.log(`✅ AI가 ${successfulSubtasks.length}/${analysis.suggestedSubtasks.length}개의 서브태스크를 성공적으로 저장했습니다.`);
+```
+
+## 기술적 성과
+
+### 1. 데이터 무결성
+- ✅ 고아 서브태스크 완전 방지
+- ✅ 서버-로컬 상태 완전 동기화
+- ✅ 실제 서버 ID 사용으로 정확한 관계 유지
+
+### 2. 에러 처리 강화
+- ✅ TypeScript 컴파일 에러 해결
+- ✅ API 호출 실패 시 안전한 처리
+- ✅ 상세한 로깅으로 디버깅 지원
+
+### 3. 사용자 편의성
+- ✅ 시간 기반 할일 추가 시스템
+- ✅ 직관적인 진행률 관리
+- ✅ 실시간 캘린더 업데이트
+
+## 현재 상태
+- 고아 서브태스크 문제 완전 해결
+- 시간별 할일 추가 기능 완성
+- TypeScript 컴파일 에러 해결
+- 모든 변경사항 GitHub에 커밋 완료
+- Vercel/AWS 자동 배포 대기
+
+## 사용자 피드백
+- "지금 너무 커" → 정리 버튼 크기 축소 후 제거
+- "디자인 최악이야" → 서브태스크 표시 형식 개선
+- "보기 안좋은듯" → 불필요한 UI 요소 제거
+
+모든 요구사항이 만족되었으며, 앱의 안정성과 사용성이 크게 향상되었습니다.

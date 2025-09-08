@@ -507,6 +507,18 @@ app.post('/api/analyze-task', async (req, res) => {
   }
 });
 
+// Health check endpoint
+app.get('/api/health', (_req, res) => {
+  res.status(200).json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    port: port,
+    environment: process.env.NODE_ENV || 'development',
+    version: '1.0.0'
+  });
+});
+
 app.listen(port, async () => {
   console.log(`🚀 Server running on port ${port}`);
   console.log(`📅 서버 시작 시간: ${new Date().toISOString()}`);

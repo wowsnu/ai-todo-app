@@ -1,0 +1,20 @@
+[Unit]
+Description=AI Todo App Server
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/ai-todo-app/server
+ExecStart=/usr/bin/node dist/server.js
+Restart=on-failure
+RestartSec=10
+Environment=NODE_ENV=production
+
+# Logging
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=ai-todo-server
+
+[Install]
+WantedBy=multi-user.target

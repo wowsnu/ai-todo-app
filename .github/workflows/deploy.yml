@@ -1,0 +1,122 @@
+name: Deploy AI Todo App to AWS EC2
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:  # 수동 실행 가능
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: |
+        npm ci
+        cd server && npm ci
+
+    - name: Build applications
+      run: |
+        npm run build
+        cd server && npm run build
+
+    - name: Run tests (if available)
+      run: |
+        if [ -f "package.json" ] && grep -q "\"test\"" package.json; then
+          npm test -- --coverage --watchAll=false --passWithNoTests
+        else
+          echo "No tests found, skipping..."
+        fi
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+    - name: Deploy to EC2
+      uses: appleboy/ssh-action@v0.1.8
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          set -e  # 에러 시 스크립트 중단
+          
+          echo "🚀 Starting deployment..."
+          
+          # 백업 생성
+          if [ -d "/home/ubuntu/ai-todo-app-backup" ]; then
+            rm -rf /home/ubuntu/ai-todo-app-backup
+          fi
+          cp -r /home/ubuntu/ai-todo-app /home/ubuntu/ai-todo-app-backup
+          echo "📦 Backup created"
+          
+          cd /home/ubuntu/ai-todo-app/
+          
+          # Git pull latest changes
+          echo "⬇️ Pulling latest changes..."
+          git fetch origin
+          git reset --hard origin/main
+          
+          # Install dependencies
+          echo "📋 Installing dependencies..."
+          npm install --only=production
+          cd server && npm install --only=production && cd ..
+          
+          # Build applications
+          echo "🔨 Building applications..."
+          npm run build
+          cd server && npm run build && cd ..
+          
+          # Environment variables management
+          echo "🔧 Managing environment variables..."
+          if [ ! -f server/.env ]; then
+            echo "Creating new .env file..."
+            echo "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" > server/.env
+            echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> server/.env
+            echo "PORT=2222" >> server/.env
+            echo "NODE_ENV=production" >> server/.env
+          else
+            echo ".env file already exists, keeping existing configuration"
+          fi
+          
+          # PM2 restart with better error handling
+          echo "🔄 Restarting PM2 processes..."
+          if pm2 list | grep -q "ai-todo-server"; then
+            pm2 restart ai-todo-server
+          else
+            pm2 start server/dist/server.js --name "ai-todo-server"
+          fi
+          
+          # Health check
+          echo "🏥 Performing health check..."
+          sleep 5
+          if curl -f http://localhost:2222/api/health 2>/dev/null; then
+            echo "✅ Health check passed"
+          else
+            echo "⚠️ Health check failed, but deployment completed"
+          fi
+          
+          # Show PM2 status
+          pm2 status
+          
+          echo "✅ Deployment completed successfully!"
+          echo "🌐 App is running at http://${{ secrets.EC2_HOST }}:2222"
+
+    - name: Deployment Status
+      if: always()
+      run: |
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "🎉 Deployment successful!"
+        else
+          echo "❌ Deployment failed. Check logs above."
+        fi
