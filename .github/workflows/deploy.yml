@@ -52,47 +52,47 @@ jobs:
           echo "🚀 Starting deployment..."
           
           # 백업 생성
-          if [ -d "/home/ubuntu/ai-todo-app-backup" ]; then
-            rm -rf /home/ubuntu/ai-todo-app-backup
+          if [ -d "/opt/ai-todo-app-backup" ]; then
+            sudo rm -rf /opt/ai-todo-app-backup
           fi
-          cp -r /home/ubuntu/ai-todo-app /home/ubuntu/ai-todo-app-backup
+          sudo cp -r /opt/ai-todo-app /opt/ai-todo-app-backup
           echo "📦 Backup created"
           
-          cd /home/ubuntu/ai-todo-app/
+          cd /opt/ai-todo-app/
           
           # Git pull latest changes
           echo "⬇️ Pulling latest changes..."
-          git fetch origin
-          git reset --hard origin/main
+          sudo git fetch origin
+          sudo git reset --hard origin/main
           
           # Install dependencies
           echo "📋 Installing dependencies..."
-          npm install --only=production
-          cd server && npm install --only=production && cd ..
+          sudo npm install --only=production
+          cd server && sudo npm install --only=production && cd ..
           
           # Build applications
           echo "🔨 Building applications..."
-          npm run build
-          cd server && npm run build && cd ..
+          sudo npm run build
+          cd server && sudo npm run build && cd ..
           
           # Environment variables management
           echo "🔧 Managing environment variables..."
           if [ ! -f server/.env ]; then
             echo "Creating new .env file..."
-            echo "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" > server/.env
-            echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> server/.env
-            echo "PORT=2222" >> server/.env
-            echo "NODE_ENV=production" >> server/.env
+            echo "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" | sudo tee server/.env
+            echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" | sudo tee -a server/.env
+            echo "PORT=2222" | sudo tee -a server/.env
+            echo "NODE_ENV=production" | sudo tee -a server/.env
           else
             echo ".env file already exists, keeping existing configuration"
           fi
           
           # PM2 restart with better error handling
           echo "🔄 Restarting PM2 processes..."
-          if pm2 list | grep -q "ai-todo-server"; then
-            pm2 restart ai-todo-server
+          if pm2 list | grep -q "ai-todo-backend"; then
+            pm2 restart ai-todo-backend
           else
-            pm2 start server/dist/server.js --name "ai-todo-server"
+            pm2 start server/dist/server.js --name "ai-todo-backend"
           fi
           
           # Health check
