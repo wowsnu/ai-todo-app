@@ -45,6 +45,7 @@ jobs:
         host: ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_SSH_KEY }}
+        port: 2222
         script: |
           set -e  # 에러 시 스크립트 중단
           
