@@ -6,7 +6,7 @@ import { TodoData } from './types/todo';
 import { aiService, TaskAnalysis } from './services/aiService';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import GoogleLogin from './components/GoogleLogin';
-import { User } from 'lucide-react';
+// import { User } from 'lucide-react'; // Commented out - not used
 
 // UI와 완전 호환되는 Todo 인터페이스 (원래 디자인 유지)
 interface Subtask {
@@ -62,7 +62,7 @@ const apiTodoToUiTodo = (todoData: TodoData): Todo => {
 
 // 인증된 사용자를 위한 메인 애플리케이션 컴포넌트
 function AuthenticatedApp() {
-  const { user, logout } = useAuth();
+  const { user: _user, logout: _logout } = useAuth();
   const [todos, setTodos] = useState<Todo[]>([]);
   const [, setLoading] = useState(true);
   const [inputText, setInputText] = useState('');
@@ -71,8 +71,8 @@ function AuthenticatedApp() {
   const [showProgress, setShowProgress] = useState(false);
   
   // 투두비 지니 리워드 시스템
-  const [showReward, setShowReward] = useState(false);
-  const [rewardData, setRewardData] = useState<{
+  const [_showReward, setShowReward] = useState(false);
+  const [_rewardData, setRewardData] = useState<{
     mainTask: Todo | null;
     completedSubtasks: number;
     totalSubtasks: number;
@@ -204,7 +204,7 @@ function AuthenticatedApp() {
   const [tempMemo, setTempMemo] = useState('');
   
   // 서브태스크 요구사항 편집 상태
-  const [tempRequirements, setTempRequirements] = useState('');
+  const [_tempRequirements, setTempRequirements] = useState('');
   
   // 통합 자료 업로드 상태 (파일 + 링크) - 메인태스크별로 분리
   const [isDragOver, setIsDragOver] = useState(false);
@@ -214,10 +214,10 @@ function AuthenticatedApp() {
   
   // AI 분석 관련 상태
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisResult, setAnalysisResult] = useState<TaskAnalysis | null>(null);
-  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [_analysisResult, setAnalysisResult] = useState<TaskAnalysis | null>(null);
+  const [_analysisError, setAnalysisError] = useState<string | null>(null);
   const [aiRequirements, setAiRequirements] = useState(''); // 요구사항 입력
-  const [difficultyLevel, setDifficultyLevel] = useState<'easy' | 'normal' | 'hard'>('normal'); // 난이도 선택
+  const [_difficultyLevel, _setDifficultyLevel] = useState<'easy' | 'normal' | 'hard'>('normal'); // 난이도 선택
 
   // 선택된 날짜의 서브태스크들을 표시 (실제 일정)
   const getDailyTasks = () => {
@@ -391,7 +391,7 @@ function AuthenticatedApp() {
   };
 
   // 보상 선택 및 확인
-  const confirmReward = () => {
+  const _confirmReward = () => {
     if (selectedReward) {
       const selectedOption = rewardOptions.find(option => option.id === selectedReward);
       if (selectedOption) {
@@ -602,7 +602,7 @@ function AuthenticatedApp() {
   }, []);
 
   // 고아 서브태스크 정리 함수
-  const cleanupOrphanedSubtasks = async () => {
+  const cleanupOrphanedSubtasks = React.useCallback(async () => {
     try {
       console.log('🧹 고아 서브태스크 정리를 시작합니다...');
       
@@ -641,7 +641,7 @@ function AuthenticatedApp() {
       console.error('❌ 고아 서브태스크 정리 중 오류:', error);
       return 0;
     }
-  };
+  }, [setSubtasks, setTodos]);
 
   // 개발용: 브라우저 콘솔에서 접근 가능하도록 window 객체에 추가
   React.useEffect(() => {
@@ -968,7 +968,7 @@ function AuthenticatedApp() {
   };
 
   // 서브태스크 요구사항 저장 함수
-  const saveSubtaskRequirements = async (id: string, requirements: string) => {
+  const _saveSubtaskRequirements = async (id: string, requirements: string) => {
     try {
       // API를 통해 서브태스크 요구사항 저장
       await apiService.updateTodo(id, { memo: requirements }); // 임시로 memo 필드 사용
@@ -2798,7 +2798,7 @@ function AuthenticatedApp() {
 
 // 인증 상태에 따라 다른 화면을 보여주는 컴포넌트
 function MainApp() {
-  const { user, isLoading, login, logout } = useAuth();
+  const { user, isLoading, login, logout: _logout } = useAuth();
 
   const handleLoginSuccess = (data: any) => {
     console.log('Login successful:', data);
