@@ -3,12 +3,44 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import { Database } from 'sqlite3';
+import jwt from 'jsonwebtoken';
+import { OAuth2Client } from 'google-auth-library';
 
 dotenv.config({ path: path.join(__dirname, '.env') });
 const aiService = require('./aiService');
 
 const app = express();
 const port = process.env.PORT || 3001;
+
+// Google OAuth client
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+// JWT secret
+const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_here';
+
+// Authentication middleware
+interface AuthRequest extends express.Request {
+  userId?: string;
+  userEmail?: string;
+}
+
+async function authenticateToken(req: AuthRequest, res: express.Response, next: express.NextFunction) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Access token required' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    req.userId = decoded.userId;
+    req.userEmail = decoded.email;
+    next();
+  } catch (error) {
+    return res.status(403).json({ error: 'Invalid token' });
+  }
+}
 
 
 // Middleware
@@ -40,10 +72,24 @@ app.get('/', (req, res) => {
 
 // Initialize database tables
 db.serialize(() => {
-  // Todos table
+  // Users table
+  db.run(`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      email TEXT UNIQUE NOT NULL,
+      name TEXT NOT NULL,
+      picture TEXT,
+      google_id TEXT UNIQUE NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Todos table (with user_id)
   db.run(`
     CREATE TABLE IF NOT EXISTS todos (
       id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
       time TEXT,
       title TEXT NOT NULL,
       description TEXT,
@@ -56,7 +102,8 @@ db.serialize(() => {
       date TEXT,
       estimatedDuration INTEGER,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users (id)
     )
   `);
 
@@ -101,6 +148,17 @@ db.serialize(() => {
     }
   });
 
+  // Add user_id column to existing todos table
+  db.run(`ALTER TABLE todos ADD COLUMN user_id TEXT`, function(err) {
+    if (err && err.message.includes('duplicate column name')) {
+      console.log('✅ User_id column already exists');
+    } else if (err) {
+      console.log('⚠️  User_id ALTER TABLE error:', err.message);
+    } else {
+      console.log('✅ Added user_id column to existing table');
+    }
+  });
+
   // Daily summaries table
   db.run(`
     CREATE TABLE IF NOT EXISTS daily_summaries (
@@ -118,9 +176,119 @@ db.serialize(() => {
 
 });
 
-// Todo API endpoints
-app.get('/api/todos', (req, res) => {
-  db.all('SELECT * FROM todos ORDER BY created_at DESC', (err, rows) => {
+// Google OAuth login endpoint
+app.post('/api/auth/google', async (req, res) => {
+  try {
+    const { token } = req.body;
+    
+    if (!token) {
+      return res.status(400).json({ error: 'Google token required' });
+    }
+
+    // Basic env validation
+    if (!process.env.GOOGLE_CLIENT_ID) {
+      console.error('Missing GOOGLE_CLIENT_ID in server environment');
+      return res.status(500).json({ error: 'Server misconfiguration: GOOGLE_CLIENT_ID is not set' });
+    }
+
+    // Verify Google token
+    const ticket = await client.verifyIdToken({
+      idToken: token,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    if (!payload) {
+      return res.status(400).json({ error: 'Invalid Google token' });
+    }
+
+    const { sub: googleId, email, name, picture } = payload;
+    
+    if (!email || !name) {
+      return res.status(400).json({ error: 'Missing user information' });
+    }
+
+    // Check if user exists
+    const existingUser = await new Promise((resolve, reject) => {
+      db.get('SELECT * FROM users WHERE google_id = ?', [googleId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    let userId: string;
+
+    if (existingUser) {
+      // Update existing user
+      userId = (existingUser as any).id;
+      await new Promise((resolve, reject) => {
+        db.run(
+          'UPDATE users SET email = ?, name = ?, picture = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          [email, name, picture, userId],
+          function(err) {
+            if (err) reject(err);
+            else resolve(this);
+          }
+        );
+      });
+    } else {
+      // Create new user
+      userId = `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      await new Promise((resolve, reject) => {
+        db.run(
+          'INSERT INTO users (id, email, name, picture, google_id) VALUES (?, ?, ?, ?, ?)',
+          [userId, email, name, picture, googleId],
+          function(err) {
+            if (err) reject(err);
+            else resolve(this);
+          }
+        );
+      });
+    }
+
+    // Generate JWT token
+    const jwtToken = jwt.sign(
+      { userId, email, name },
+      JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
+    res.json({
+      success: true,
+      user: { id: userId, email, name, picture },
+      token: jwtToken
+    });
+
+  } catch (error: any) {
+    console.error('Google auth error:', error?.message || error);
+    // Try to expose a bit more context for local debugging only
+    res.status(500).json({ 
+      error: 'Authentication failed',
+      message: error?.message || 'Unknown error',
+      hint: 'Check GOOGLE_CLIENT_ID on server and REACT_APP_GOOGLE_CLIENT_ID on frontend; ensure OAuth client type is Web and localhost:3000 is authorized.'
+    });
+  }
+});
+
+// Get current user info
+app.get('/api/auth/me', authenticateToken, (req: AuthRequest, res) => {
+  db.get('SELECT id, email, name, picture FROM users WHERE id = ?', [req.userId], (err, user) => {
+    if (err) {
+      console.error('Get user error:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json({ user });
+  });
+});
+
+// Todo API endpoints (now with authentication)
+app.get('/api/todos', authenticateToken, (req: AuthRequest, res) => {
+  db.all('SELECT * FROM todos WHERE user_id = ? ORDER BY created_at DESC', [req.userId], (err, rows) => {
     if (err) {
       res.status(500).json({ error: err.message });
       return;
@@ -129,7 +297,7 @@ app.get('/api/todos', (req, res) => {
   });
 });
 
-app.post('/api/todos', (req, res) => {
+app.post('/api/todos', authenticateToken, (req: AuthRequest, res) => {
   console.log('📝 POST /api/todos - Received request:', req.body);
   
   const { id, time, title, description, location, isFromCalendar, progress, deadline, parentTodoId, status, date, estimatedDuration, memo } = req.body;
@@ -141,13 +309,13 @@ app.post('/api/todos', (req, res) => {
   }
   
   console.log('📋 Creating todo with data:', {
-    id, time, title, description, location, isFromCalendar, progress, deadline, parentTodoId, status, date, estimatedDuration, memo
+    id, time, title, description, location, isFromCalendar, progress, deadline, parentTodoId, status, date, estimatedDuration, memo, user_id: req.userId
   });
   
   db.run(`
-    INSERT INTO todos (id, time, title, description, location, isFromCalendar, progress, deadline, parentTodoId, status, date, estimatedDuration, memo)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `, [id, time, title, description, location, isFromCalendar, progress, deadline, parentTodoId, status || 'active', date, estimatedDuration, memo], function(err) {
+    INSERT INTO todos (id, user_id, time, title, description, location, isFromCalendar, progress, deadline, parentTodoId, status, date, estimatedDuration, memo)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [id, req.userId, time, title, description, location, isFromCalendar, progress, deadline, parentTodoId, status || 'active', date, estimatedDuration, memo], function(err) {
     if (err) {
       console.error('❌ Database error:', err.message);
       res.status(500).json({ error: err.message });
@@ -158,7 +326,7 @@ app.post('/api/todos', (req, res) => {
   });
 });
 
-app.put('/api/todos/:id', (req, res) => {
+app.put('/api/todos/:id', authenticateToken, (req: AuthRequest, res) => {
   const { id } = req.params;
   const updates = req.body;
   
@@ -182,8 +350,9 @@ app.put('/api/todos/:id', (req, res) => {
   
   updateFields.push('updated_at = CURRENT_TIMESTAMP');
   updateValues.push(id);
+  updateValues.push(req.userId);
   
-  const query = `UPDATE todos SET ${updateFields.join(', ')} WHERE id = ?`;
+  const query = `UPDATE todos SET ${updateFields.join(', ')} WHERE id = ? AND user_id = ?`;
   
   db.run(query, updateValues, function(err) {
     if (err) {
@@ -194,10 +363,10 @@ app.put('/api/todos/:id', (req, res) => {
   });
 });
 
-app.delete('/api/todos/:id', (req, res) => {
+app.delete('/api/todos/:id', authenticateToken, (req: AuthRequest, res) => {
   const { id } = req.params;
   
-  db.run('DELETE FROM todos WHERE id = ?', [id], function(err) {
+  db.run('DELETE FROM todos WHERE id = ? AND user_id = ?', [id, req.userId], function(err) {
     if (err) {
       res.status(500).json({ error: err.message });
       return;
@@ -306,7 +475,8 @@ app.post('/api/analyze-task', async (req, res) => {
       fileContents, 
       webContents,
       userRequirements,
-      difficultyLevel
+      difficultyLevel,
+      userSchedule
     } = req.body;
     
     if (!mainTaskTitle) {
@@ -321,7 +491,8 @@ app.post('/api/analyze-task', async (req, res) => {
       fileContents || [],
       webContents || [],
       userRequirements || '',
-      difficultyLevel || 'normal'
+      difficultyLevel || 'normal',
+      userSchedule || null
     );
     
     console.log('✅ AI 분석 완료:', analysis.complexity);

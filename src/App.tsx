@@ -4,6 +4,9 @@ import { googleCalendarService } from './services/googleCalendar';
 import { apiService, DailySummary } from './services/api';
 import { TodoData } from './types/todo';
 import { aiService, TaskAnalysis } from './services/aiService';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import GoogleLogin from './components/GoogleLogin';
+import { User } from 'lucide-react';
 
 // UI와 완전 호환되는 Todo 인터페이스 (원래 디자인 유지)
 interface Subtask {
@@ -16,6 +19,7 @@ interface Subtask {
   estimatedDuration: number; // 예상 소요시간 (분 단위)
   parentMainTaskId: string; // 어떤 Main Task의 서브태스크인지
   memo?: string; // 서브태스크 메모
+  requirements?: string; // 서브태스크별 개별 요구사항
 }
 
 interface Todo {
@@ -56,7 +60,9 @@ const apiTodoToUiTodo = (todoData: TodoData): Todo => {
 
 
 
-function App() {
+// 인증된 사용자를 위한 메인 애플리케이션 컴포넌트
+function AuthenticatedApp() {
+  const { user, logout } = useAuth();
   const [todos, setTodos] = useState<Todo[]>([]);
   const [, setLoading] = useState(true);
   const [inputText, setInputText] = useState('');
@@ -156,13 +162,23 @@ function App() {
   const [dailyTaskOrder, setDailyTaskOrder] = useState<string[]>([]);
   const [selectedTodo, setSelectedTodo] = useState<Todo | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [quickInputText, setQuickInputText] = useState('');
+  const [timeInputText, setTimeInputText] = useState('');
+  const [selectedTime, setSelectedTime] = useState('09:00');
   const [subtaskPopup, setSubtaskPopup] = useState<{show: boolean, subtask: any, mainTask: Todo | null}>({
     show: false,
     subtask: null,
     mainTask: null
   });
   const [googleCalendarConnected, setGoogleCalendarConnected] = useState(false);
+  
+  // 시간 옵션들 생성 (30분 간격)
+  const timeOptions = [];
+  for (let hour = 6; hour <= 23; hour++) {
+    for (let minute of ['00', '30']) {
+      const timeString = `${hour.toString().padStart(2, '0')}:${minute}`;
+      timeOptions.push(timeString);
+    }
+  }
   // const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [isLoadingCalendar, setIsLoadingCalendar] = useState(false);
   const [summaryTooltip, setSummaryTooltip] = useState<{show: boolean, content: any | null, position: {x: number, y: number}}>({
@@ -187,6 +203,9 @@ function App() {
   // 메모 편집 상태
   const [tempMemo, setTempMemo] = useState('');
   
+  // 서브태스크 요구사항 편집 상태
+  const [tempRequirements, setTempRequirements] = useState('');
+  
   // 통합 자료 업로드 상태 (파일 + 링크) - 메인태스크별로 분리
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<Record<string, File[]>>({});
@@ -204,12 +223,25 @@ function App() {
   const getDailyTasks = () => {
     if (!selectedDate) return [];
     
-    // 선택된 날짜에 해당하는 서브태스크만 필터링
+    console.log(`🔍 [DEBUG] getDailyTasks 호출: selectedDate=${selectedDate}`);
+    console.log(`🔍 [DEBUG] 전체 서브태스크 개수: ${subtasks.length}`);
+    console.log(`🔍 [DEBUG] 서브태스크 목록:`, subtasks.map(st => ({
+      id: st.id,
+      text: st.text,
+      date: st.date,
+      parentMainTaskId: st.parentMainTaskId
+    })));
+    
+    // 선택된 날짜에 해당하는 서브태스크만 필터링 (모든 메인태스크의 서브태스크 포함)
     const filteredSubtasks = subtasks.filter(subtask => {
       // AI가 지정한 날짜가 있으면 그 날짜 사용, 없으면 오늘 날짜 사용
       const subtaskDate = subtask.date || new Date().toISOString().split('T')[0];
-      return subtaskDate === selectedDate;
+      const matches = subtaskDate === selectedDate;
+      console.log(`🔍 [DEBUG] 서브태스크 ${subtask.text} (부모: ${subtask.parentMainTaskId}): date=${subtaskDate}, matches=${matches}`);
+      return matches;
     });
+    
+    console.log(`🔍 [DEBUG] 필터링된 서브태스크 개수: ${filteredSubtasks.length}`);
     
     const dailySubtasks = filteredSubtasks.map(subtask => ({
       id: subtask.id,
@@ -250,12 +282,18 @@ function App() {
     return dailySubtasks.sort((a, b) => a.time.localeCompare(b.time));
   };
 
-  // 특정 날짜에 서브태스크가 있는지 확인하는 함수
+  // 특정 날짜에 서브태스크가 있는지 확인하는 함수 (모든 메인태스크 포함)
   const hasSubtasksOnDate = (dateString: string) => {
-    return subtasks.some(subtask => {
+    const hasSubtasks = subtasks.some(subtask => {
       const subtaskDate = subtask.date || new Date().toISOString().split('T')[0];
-      return subtaskDate === dateString;
+      const matches = subtaskDate === dateString;
+      if (matches) {
+        console.log(`📅 [DEBUG] ${dateString}에 서브태스크 발견: ${subtask.text} (부모: ${subtask.parentMainTaskId})`);
+      }
+      return matches;
     });
+    console.log(`📅 [DEBUG] ${dateString} 서브태스크 존재 여부: ${hasSubtasks}`);
+    return hasSubtasks;
   };
 
   // 특정 날짜의 서브태스크 개수를 반환하는 함수
@@ -322,13 +360,15 @@ function App() {
           time: dailyTask.time,
           progress: dailyTask.progress,
           estimatedDuration: dailyTask.estimatedDuration || originalSubtask?.estimatedDuration || 60,
-          memo: dailyTask.memo || originalSubtask?.memo || ''
+          memo: dailyTask.memo || originalSubtask?.memo || '',
+          requirements: originalSubtask?.requirements || ''
         },
         mainTask: mainTask
       });
       
-      // 메모 임시 상태 초기화
+      // 메모 및 요구사항 임시 상태 초기화
       setTempMemo(dailyTask.memo || originalSubtask?.memo || '');
+      setTempRequirements(originalSubtask?.requirements || '');
     }
   };
 
@@ -340,6 +380,7 @@ function App() {
       mainTask: null
     });
     setTempMemo(''); // 메모 임시 상태 초기화
+    setTempRequirements(''); // 요구사항 임시 상태 초기화
   };
 
   // 리워드 팝업 닫기
@@ -456,6 +497,14 @@ function App() {
           memo: apiTodo.memo || '' // 메모 필드 추가
         }));
         
+        console.log(`🔍 [DEBUG] API에서 로드된 서브태스크 데이터:`, subtaskData.length, '개');
+        console.log(`🔍 [DEBUG] 변환된 서브태스크:`, loadedSubtasks.map(st => ({
+          id: st.id,
+          text: st.text,
+          date: st.date,
+          parentMainTaskId: st.parentMainTaskId
+        })));
+        
         setTodos(uiTodos);
         
         console.log('📊 서버에서 로드된 데이터:');
@@ -535,6 +584,13 @@ function App() {
           setSubtasks(exampleSubtasks);
         }
         
+        // 현재 고아 서브태스크 정리
+        console.log('🧹 로드 완료 후 고아 서브태스크 정리 시작...');
+        const cleanedCount = await cleanupOrphanedSubtasks();
+        if (cleanedCount > 0) {
+          console.log(`✅ ${cleanedCount}개의 고아 서브태스크를 정리했습니다.`);
+        }
+        
       } catch (error) {
         console.error('Failed to load data:', error);
       } finally {
@@ -544,6 +600,53 @@ function App() {
 
     loadData();
   }, []);
+
+  // 고아 서브태스크 정리 함수
+  const cleanupOrphanedSubtasks = async () => {
+    try {
+      console.log('🧹 고아 서브태스크 정리를 시작합니다...');
+      
+      // 모든 todos 다시 로드
+      const allTodos = await apiService.getTodos();
+      const mainTaskIds = new Set(allTodos.filter(todo => !todo.parentTodoId).map(todo => todo.id));
+      const orphanedSubtasks = allTodos.filter(todo => 
+        todo.parentTodoId && !mainTaskIds.has(todo.parentTodoId)
+      );
+      
+      if (orphanedSubtasks.length > 0) {
+        console.log(`🗑️ ${orphanedSubtasks.length}개의 고아 서브태스크를 발견했습니다:`, 
+          orphanedSubtasks.map(t => `${t.title} (parent: ${t.parentTodoId})`));
+        
+        // 고아 서브태스크들 삭제
+        for (const orphan of orphanedSubtasks) {
+          await apiService.deleteTodo(orphan.id);
+          console.log(`🗑️ 고아 서브태스크 삭제: ${orphan.title}`);
+        }
+        
+        // 로컬 상태 업데이트
+        setSubtasks(prev => prev.filter(subtask => 
+          !orphanedSubtasks.some(orphan => orphan.id === subtask.id)
+        ));
+        setTodos(prev => prev.filter(todo => 
+          !orphanedSubtasks.some(orphan => orphan.id === todo.id)
+        ));
+        
+        console.log('✅ 고아 서브태스크 정리 완료!');
+        return orphanedSubtasks.length;
+      } else {
+        console.log('✅ 고아 서브태스크가 없습니다.');
+        return 0;
+      }
+    } catch (error) {
+      console.error('❌ 고아 서브태스크 정리 중 오류:', error);
+      return 0;
+    }
+  };
+
+  // 개발용: 브라우저 콘솔에서 접근 가능하도록 window 객체에 추가
+  React.useEffect(() => {
+    (window as any).cleanupOrphanedSubtasks = cleanupOrphanedSubtasks;
+  }, [cleanupOrphanedSubtasks]);
 
   // 구글 캘린더 로그인
   const handleGoogleCalendarSignIn = async () => {
@@ -628,42 +731,39 @@ function App() {
     }
   };
 
-  const addQuickTodo = async () => {
-    if (quickInputText.trim() !== '') {
-      try {
-        const newTodoData = {
-          title: quickInputText.trim(),
-          time: new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
-          description: '',
-          location: '',
-          isFromCalendar: false,
-          progress: 0,
-          deadline: selectedDate || '',
-          parentTodoId: null,
-          status: 'active'
-        };
-        
-        const apiTodo = await apiService.createTodo(newTodoData);
-        const uiTodo = apiTodoToUiTodo(apiTodo);
-        
-        // 항목들을 상태별로 분리
-        const activeTodos = todos.filter(todo => todo.status === 'active' && !todo.completed);
-        const pausedTodos = todos.filter(todo => todo.status === 'paused');
-        const completedTodos = todos.filter(todo => todo.completed);
-        
-        // 새 할일을 활성 항목들 뒤에 추가
-        setTodos([...activeTodos, uiTodo, ...pausedTodos, ...completedTodos]);
-        setQuickInputText('');
-        
-      } catch (error) {
-        console.error('Failed to add quick todo:', error);
-      }
-    }
-  };
+  // 시간별 할일 추가 함수 (왼쪽 패널에서)
+  const handleTimeBasedAdd = async (text: string, date: string, time: string) => {
+    if (!text.trim() || !date || !time) return;
 
-  const handleQuickKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      addQuickTodo();
+    const newSubtask: Subtask = {
+      id: `time-${Date.now()}`,
+      text: text,
+      completed: false,
+      time: time, // 선택된 시간
+      date: date, // 선택된 날짜
+      estimatedDuration: 60, // 기본 60분
+      parentMainTaskId: '' // 독립적인 태스크
+    };
+
+    try {
+      // 서버에 저장
+      await apiService.createTodo({
+        title: newSubtask.text,
+        time: newSubtask.time,
+        date: newSubtask.date,
+        estimatedDuration: newSubtask.estimatedDuration,
+        parentTodoId: null, // 독립적인 할일
+        progress: 0
+      });
+
+      // 로컬 상태에 추가
+      setSubtasks(prev => [...prev, newSubtask]);
+      setTimeInputText(''); // 입력창 초기화
+      
+      console.log(`✅ 시간별 할일 추가 완료: "${text}" (${date} ${time})`);
+    } catch (error) {
+      console.error('시간별 할일 추가 실패:', error);
+      alert('할일 추가에 실패했습니다.');
     }
   };
 
@@ -834,6 +934,67 @@ function App() {
       alert('메모 저장에 실패했습니다.');
     }
   };
+
+  // 서브태스크 진행률 변경 함수
+  const handleSubtaskProgressChange = async (subtaskId: string, newProgress: number) => {
+    try {
+      // API 업데이트
+      await apiService.updateTodo(subtaskId, { progress: newProgress });
+      
+      // 로컬 상태 업데이트
+      setSubtasks(prev => prev.map(subtask => {
+        if (subtask.id === subtaskId) {
+          return { ...subtask, completed: newProgress === 100 };
+        }
+        return subtask;
+      }));
+      
+      // 팝업 상태 업데이트
+      if (subtaskPopup.subtask?.id === subtaskId) {
+        setSubtaskPopup(prev => ({
+          ...prev,
+          subtask: prev.subtask ? { ...prev.subtask, progress: newProgress } : null
+        }));
+      }
+      
+      // 메인태스크 진행률 업데이트
+      const parentMainTaskId = subtasks.find(st => st.id === subtaskId)?.parentMainTaskId;
+      if (parentMainTaskId) {
+        await updateMainTaskProgress(parentMainTaskId);
+      }
+    } catch (error) {
+      console.error('Failed to update subtask progress:', error);
+    }
+  };
+
+  // 서브태스크 요구사항 저장 함수
+  const saveSubtaskRequirements = async (id: string, requirements: string) => {
+    try {
+      // API를 통해 서브태스크 요구사항 저장
+      await apiService.updateTodo(id, { memo: requirements }); // 임시로 memo 필드 사용
+      
+      // 서브태스크 상태 업데이트
+      setSubtasks(prev => prev.map(subtask => {
+        if (subtask.id === id) {
+          return { ...subtask, requirements };
+        }
+        return subtask;
+      }));
+      
+      // 서브태스크 팝업 상태도 업데이트
+      if (subtaskPopup.subtask?.id === id) {
+        setSubtaskPopup(prev => ({
+          ...prev,
+          subtask: prev.subtask ? { ...prev.subtask, requirements } : null
+        }));
+      }
+      
+      console.log('서브태스크 요구사항이 저장되었습니다.');
+    } catch (error) {
+      console.error('Failed to update subtask requirements:', error);
+      alert('요구사항 저장에 실패했습니다.');
+    }
+  };
   
 
 
@@ -887,29 +1048,6 @@ function App() {
       }));
       
       console.log(`✅ 메인 태스크 진행률 업데이트 완료: ${newProgress}%`);
-      
-      // 100% 달성 시 투두비 지니 리워드 트리거
-      console.log(`🔍 리워드 체크: newProgress = ${newProgress}, mainTaskId = ${mainTaskId}`);
-      if (newProgress === 100) {
-        console.log('🎯 100% 달성! 리워드 조건 만족');
-        const mainTask = todos.find(todo => todo.id === mainTaskId);
-        console.log('🔍 메인 태스크 찾기 결과:', mainTask);
-        if (mainTask) {
-          const rewardInfo = {
-            mainTask,
-            completedSubtasks: completedSubtasks.length,
-            totalSubtasks: mainTaskSubtasks.length
-          };
-          console.log('🎁 리워드 데이터 설정:', rewardInfo);
-          setRewardData(rewardInfo);
-          setShowReward(true);
-          console.log('🎉 프로젝트 100% 완료! 투두비 지니 등장! showReward = true');
-        } else {
-          console.log('❌ 메인 태스크를 찾을 수 없음');
-        }
-      } else {
-        console.log(`📊 아직 100% 미달성: ${newProgress}%`);
-      }
     } catch (error) {
       console.error('❌ 메인 태스크 진행률 서버 업데이트 실패:', error);
       // UI상에서는 일단 업데이트
@@ -923,20 +1061,6 @@ function App() {
         }
         return todo;
       }));
-      
-      // 에러가 발생해도 100% 달성 시 리워드 트리거
-      if (newProgress === 100) {
-        const mainTask = todos.find(todo => todo.id === mainTaskId);
-        if (mainTask) {
-          setRewardData({
-            mainTask,
-            completedSubtasks: completedSubtasks.length,
-            totalSubtasks: mainTaskSubtasks.length
-          });
-          setShowReward(true);
-          console.log('🎉 프로젝트 100% 완료! 투두비 지니 등장!');
-        }
-      }
     }
   };
 
@@ -1335,10 +1459,12 @@ function App() {
           parentMainTaskId: selectedTodo.id
         }));
 
-        // AI 생성 서브태스크들을 서버에 저장
-        const subtaskSavePromises = newSubtasks.map(async (subtask) => {
+        // AI 생성 서브태스크들을 서버에 저장 (성공한 것만 로컬에 추가)
+        const successfulSubtasks: Subtask[] = [];
+        
+        for (const subtask of newSubtasks) {
           try {
-            await apiService.createTodo({
+            const savedTodo = await apiService.createTodo({
               title: subtask.text,
               time: subtask.time,
               date: subtask.date,
@@ -1346,37 +1472,56 @@ function App() {
               parentTodoId: selectedTodo.id,
               progress: 0
             });
-            console.log('✅ AI 서브태스크 서버 저장 완료:', subtask.text);
+            
+            // 서버에서 반환된 ID로 업데이트 (서버 ID가 실제 ID)
+            const updatedSubtask = { ...subtask, id: savedTodo.id };
+            successfulSubtasks.push(updatedSubtask);
+            console.log('✅ AI 서브태스크 서버 저장 완료:', subtask.text, '(ID:', savedTodo.id, ')');
           } catch (error) {
             console.error('❌ AI 서브태스크 서버 저장 실패:', subtask.text, error);
+            // 실패한 서브태스크는 로컬에 추가하지 않음
           }
+        }
+
+        console.log(`🔍 [DEBUG] AI 분석 완료 - 성공적으로 저장된 서브태스크들:`, successfulSubtasks.map(st => ({
+          id: st.id,
+          text: st.text,
+          date: st.date,
+          parentMainTaskId: st.parentMainTaskId
+        })));
+        
+        setSubtasks(prev => {
+          const filtered = prev.filter(st => st.parentMainTaskId !== selectedTodo.id);
+          const updated = [...filtered, ...successfulSubtasks];
+          console.log(`🔍 [DEBUG] 서브태스크 상태 업데이트: ${prev.length} -> ${updated.length} (성공: ${successfulSubtasks.length}/${newSubtasks.length})`);
+          return updated;
         });
 
-        // 모든 서브태스크 저장 시도
-        await Promise.allSettled(subtaskSavePromises);
-
-        setSubtasks(prev => [
-          ...prev.filter(st => st.parentMainTaskId !== selectedTodo.id), // 기존 서브태스크 제거
-          ...newSubtasks
-        ]);
-
-        // 생성된 서브태스크들의 날짜별 분포 로깅
+        // 성공적으로 저장된 서브태스크들의 날짜별 분포 로깅
         const dateDistribution: Record<string, number> = {};
-        newSubtasks.forEach(subtask => {
+        successfulSubtasks.forEach(subtask => {
           const date = subtask.date || 'unknown';
           dateDistribution[date] = (dateDistribution[date] || 0) + 1;
         });
 
-        console.log(`✅ AI가 ${analysis.suggestedSubtasks.length}개의 서브태스크를 생성했습니다.`);
+        console.log(`✅ AI가 ${successfulSubtasks.length}/${analysis.suggestedSubtasks.length}개의 서브태스크를 성공적으로 저장했습니다.`);
         console.log(`📅 날짜별 분포:`, dateDistribution);
 
-        // 생성된 서브태스크가 있는 첫 번째 날짜로 자동 이동
-        if (newSubtasks.length > 0 && newSubtasks[0].date) {
-          setSelectedDate(newSubtasks[0].date);
+        // 성공적으로 생성된 서브태스크가 있는 첫 번째 날짜로 자동 이동
+        if (successfulSubtasks.length > 0 && successfulSubtasks[0].date) {
+          setSelectedDate(successfulSubtasks[0].date);
         }
         
         // 메인 태스크 진행률 초기화 (AI가 서브태스크 생성 시 0%로 시작)
         await updateMainTaskProgress(selectedTodo.id);
+        
+        // 달력에 새로운 서브태스크가 즉시 반영되도록 강제 리렌더링
+        console.log('🔄 달력 리렌더링을 위한 상태 업데이트');
+        
+        // 성공적으로 저장된 서브태스크들의 날짜를 체크해서 달력에 표시되도록 함
+        const uniqueDates = new Set(successfulSubtasks.map(st => st.date).filter(Boolean) as string[]);
+        const affectedDates = Array.from(uniqueDates);
+        console.log('📅 영향받는 날짜들:', affectedDates);
       }
 
     } catch (error) {
@@ -1389,32 +1534,55 @@ function App() {
 
   const deleteTodo = async (id: string) => {
     try {
+      console.log(`🗑️ 삭제 요청된 ID: ${id}`);
+      
       // 삭제할 todo 찾기
       const todoToDelete = todos.find(todo => todo.id === id);
-      if (!todoToDelete) return;
+      if (!todoToDelete) {
+        console.error(`❌ 삭제할 todo를 찾을 수 없습니다: ${id}`);
+        return;
+      }
 
       // 메인태스크인지 서브태스크인지 확인
       const isMainTask = !todoToDelete.parentTodoId;
+      console.log(`📋 ${isMainTask ? '메인태스크' : '서브태스크'} 삭제: ${todoToDelete.title || todoToDelete.text}`);
       
       if (isMainTask) {
         // 메인태스크 삭제 시: 관련된 모든 서브태스크도 함께 삭제
         const relatedSubtasks = subtasks.filter(subtask => subtask.parentMainTaskId === id);
+        console.log(`🔍 발견된 관련 서브태스크: ${relatedSubtasks.length}개`);
+        
+        // 서버에서 서브태스크들 검색 및 삭제 (로컬과 서버 동기화)
+        const allServerTodos = await apiService.getTodos();
+        const serverSubtasks = allServerTodos.filter(todo => todo.parentTodoId === id);
+        console.log(`🔍 서버에서 발견된 관련 서브태스크: ${serverSubtasks.length}개`);
+        
+        // 서버와 로컬의 서브태스크를 모두 합쳐서 처리
+        const allRelatedSubtasks = new Set([
+          ...relatedSubtasks.map(st => st.id),
+          ...serverSubtasks.map(st => st.id)
+        ]);
+        
+        console.log(`🗑️ 총 삭제할 서브태스크: ${allRelatedSubtasks.size}개`);
         
         // 서브태스크들을 먼저 삭제
-        for (const subtask of relatedSubtasks) {
-          await apiService.deleteTodo(subtask.id);
+        for (const subtaskId of Array.from(allRelatedSubtasks)) {
+          try {
+            await apiService.deleteTodo(subtaskId);
+            console.log(`✅ 서브태스크 삭제 완료: ${subtaskId}`);
+          } catch (error) {
+            console.error(`❌ 서브태스크 삭제 실패: ${subtaskId}`, error);
+          }
         }
         
         // 메인태스크 삭제
         await apiService.deleteTodo(id);
+        console.log(`✅ 메인태스크 삭제 완료: ${id}`);
         
         // 로컬 상태에서 메인태스크와 관련 서브태스크들 제거
-        setTodos(prev => prev.filter(todo => todo.id !== id));
+        const relatedSubtaskIds = Array.from(allRelatedSubtasks);
+        setTodos(prev => prev.filter(todo => todo.id !== id && !relatedSubtaskIds.includes(todo.id)));
         setSubtasks(prev => prev.filter(subtask => subtask.parentMainTaskId !== id));
-        
-        // todos 배열에서도 관련 서브태스크들 제거 (만약 있다면)
-        const relatedSubtaskIds = relatedSubtasks.map(subtask => subtask.id);
-        setTodos(prev => prev.filter(todo => !relatedSubtaskIds.includes(todo.id)));
         
         // 업로드된 파일들도 정리
         setUploadedFiles(prev => {
@@ -1434,14 +1602,17 @@ function App() {
           setSelectedTodo(null);
         }
         
-        console.log(`메인태스크 ${id}와 관련 서브태스크들이 삭제되었습니다.`);
+        console.log(`✅ 메인태스크 ${id}와 관련 서브태스크들이 완전히 삭제되었습니다.`);
       } else {
         // 서브태스크 삭제 시: 해당 서브태스크만 삭제
         await apiService.deleteTodo(id);
         setTodos(prev => prev.filter(todo => todo.id !== id));
+        setSubtasks(prev => prev.filter(subtask => subtask.id !== id));
+        console.log(`✅ 서브태스크 ${id} 삭제 완료`);
       }
     } catch (error) {
-      console.error('Failed to delete todo:', error);
+      console.error('❌ 삭제 중 오류 발생:', error);
+      alert('삭제 중 오류가 발생했습니다. 콘솔을 확인해주세요.');
     }
   };
 
@@ -1647,6 +1818,22 @@ function App() {
 
   return (
     <div className="App">
+      {/* 임시 로그아웃 버튼 (데모용) */}
+      <div style={{position: 'fixed', top: '10px', right: '10px', zIndex: 1000}}>
+        <button 
+          onClick={logout}
+          style={{
+            padding: '8px 16px',
+            background: 'rgba(255, 255, 255, 0.9)',
+            border: '1px solid #ddd',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontSize: '12px'
+          }}
+        >
+          로그아웃 (데모)
+        </button>
+      </div>
       <div className="three-column-layout">
         {/* 왼쪽 컬럼: 주간 달력 패널 */}
         <div className="left-column">
@@ -1726,39 +1913,46 @@ function App() {
                 ))}
               </div>
             </div>
-            <div className="quick-add-section">
+            <div className="time-add-section">
               <h4>
                 {selectedDate ? (
-                  <>➕ {new Date(selectedDate).toLocaleDateString('ko-KR', { 
+                  <>⏰ {new Date(selectedDate).toLocaleDateString('ko-KR', { 
                     month: 'long', 
                     day: 'numeric', 
                     weekday: 'short' 
-                  })} 할일 추가</>
+                  })} 시간별 추가</>
                 ) : (
-                  <>➕ 할일 추가</>
+                  <>⏰ 시간별 할일 추가</>
                 )}
               </h4>
               
-              <div className="quick-input-container">
+              <div className="time-add-container">
+                <select 
+                  value={selectedTime} 
+                  onChange={(e) => setSelectedTime(e.target.value)}
+                  className="time-select"
+                  disabled={!selectedDate}
+                >
+                  {timeOptions.map(time => (
+                    <option key={time} value={time}>{time}</option>
+                  ))}
+                </select>
                 <input
                   type="text"
-                  value={quickInputText}
-                  onChange={(e) => setQuickInputText(e.target.value)}
-                  onKeyDown={handleQuickKeyDown}
-                  placeholder={selectedDate ? "할 일을 입력하세요..." : "먼저 날짜를 선택하세요"}
-                  className="quick-todo-input"
+                  value={timeInputText}
+                  onChange={(e) => setTimeInputText(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter' && timeInputText.trim() && selectedDate) {
+                      handleTimeBasedAdd(timeInputText.trim(), selectedDate, selectedTime);
+                    }
+                  }}
+                  placeholder={selectedDate ? "할일 입력 후 Enter" : "먼저 날짜를 선택하세요"}
+                  className="time-input"
                   disabled={!selectedDate}
                 />
-                <button 
-                  onClick={addQuickTodo} 
-                  className="quick-add-button"
-                  disabled={!selectedDate || !quickInputText.trim()}
-                >
-                  +
-                </button>
               </div>
             </div>
-            
+
             <div className="daily-tasks-section">
               {selectedDate ? (
                 <>
@@ -2383,36 +2577,9 @@ function App() {
                               rows={3}
                             />
                           </div>
-                          
-                          <div className="difficulty-section">
-                            <label className="ai-label">⚡ 난이도 설정</label>
-                            <div className="difficulty-options">
-                              <button
-                                type="button"
-                                className={`difficulty-btn ${difficultyLevel === 'easy' ? 'active' : ''}`}
-                                onClick={() => setDifficultyLevel('easy')}
-                              >
-                                <img src="/쉬는_fanda.png" alt="resting panda" className="difficulty-panda-icon" /> 널널하게
-                              </button>
-                              <button
-                                type="button"
-                                className={`difficulty-btn ${difficultyLevel === 'normal' ? 'active' : ''}`}
-                                onClick={() => setDifficultyLevel('normal')}
-                              >
-                                <img src="/보통fanda.png" alt="normal panda" className="difficulty-panda-icon" /> 보통
-                              </button>
-                              <button
-                                type="button"
-                                className={`difficulty-btn ${difficultyLevel === 'hard' ? 'active' : ''}`}
-                                onClick={() => setDifficultyLevel('hard')}
-                              >
-                                <img src="/엄격한fanda.png" alt="strict panda" className="difficulty-panda-icon" /> 빡세게
-                              </button>
-                            </div>
-                          </div>
                         </div>
 
-                        {/* 투두비 분석 버튼 - 드롭존 아래로 이동 */}
+                        {/* 투두비 분석 버튼 */}
                         <button 
                           className="todooby-analyze-btn-bottom"
                           onClick={handleTodoAnalysis}
@@ -2421,26 +2588,6 @@ function App() {
                           <img src="/analytics-panda.png" alt="분석 팬더" className="panda-icon" />
                           {isAnalyzing ? '분석 중...' : '투두비 분석'}
                         </button>
-
-
-
-                        {/* AI 분석 결과/오류 표시 */}
-                        {analysisError && (
-                          <div className="analysis-error">
-                            <p>❌ {analysisError}</p>
-                          </div>
-                        )}
-
-                        {analysisResult && (
-                          <div className="analysis-result">
-                            <div className="analysis-summary">
-                              <p>🎯 복잡도: <strong>{analysisResult.complexity === 'simple' ? '간단' : analysisResult.complexity === 'moderate' ? '보통' : '복잡'}</strong></p>
-                              <p>⏱️ 예상 소요시간: <strong>{Math.round(analysisResult.estimatedTotalTime / 60)}시간 {analysisResult.estimatedTotalTime % 60}분</strong></p>
-                              <p>🔥 우선순위: <strong>{analysisResult.priority === 'high' ? '높음' : analysisResult.priority === 'medium' ? '보통' : '낮음'}</strong></p>
-                              <p>📝 서브태스크: <strong>{analysisResult.suggestedSubtasks.length}개 생성됨</strong></p>
-                            </div>
-                          </div>
-                        )}
                       </div>
                     </div>
                     
@@ -2475,7 +2622,10 @@ function App() {
                               <div key={subtask.id} className="subtask-preview">
                                 <div className="subtask-info">
                                   <span className="subtask-text">{subtask.text}</span>
-                                  <span className="subtask-time">⏰ {subtask.time} ({subtask.estimatedDuration}분)</span>
+                                  <span className="subtask-time">📅 {subtask.date && new Date(subtask.date).toLocaleDateString('ko-KR', { 
+                                    month: 'short', 
+                                    day: 'numeric' 
+                                  })} {subtask.time}</span>
                                 </div>
                                 <button
                                   onClick={() => removeSubtaskFromMainTask(subtask.id)}
@@ -2536,10 +2686,10 @@ function App() {
                       <div className="main-progress-bar">
                         <div 
                           className="main-progress-fill" 
-                          style={{width: `${calculateMainTaskProgress(subtaskPopup.mainTask.id)}%`}}
+                          style={{width: `${subtaskPopup.mainTask.progress || calculateMainTaskProgress(subtaskPopup.mainTask.id)}%`}}
                         ></div>
                       </div>
-                      <span className="progress-percentage">{calculateMainTaskProgress(subtaskPopup.mainTask.id)}%</span>
+                      <span className="progress-percentage">{subtaskPopup.mainTask.progress || calculateMainTaskProgress(subtaskPopup.mainTask.id)}%</span>
                     </div>
                   </div>
                   
@@ -2571,13 +2721,16 @@ function App() {
                   <div className="subtask-title">{subtaskPopup.subtask.title}</div>
                   <div className="subtask-time">⏰ {subtaskPopup.subtask.time}</div>
                   <div className="subtask-progress-info">
-                    <span>진행률: {subtaskPopup.subtask.progress}%</span>
-                    <div className="subtask-progress-bar">
-                      <div 
-                        className="subtask-progress-fill" 
-                        style={{width: `${subtaskPopup.subtask.progress}%`}}
-                      ></div>
-                    </div>
+                    <label>진행률: {subtaskPopup.subtask.progress}%</label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={subtaskPopup.subtask.progress}
+                      onChange={(e) => handleSubtaskProgressChange(subtaskPopup.subtask.id, parseInt(e.target.value))}
+                      className="subtask-progress-slider"
+                      style={{'--progress': `${subtaskPopup.subtask.progress}%`} as React.CSSProperties}
+                    />
                   </div>
                 </div>
               </div>
@@ -2608,67 +2761,6 @@ function App() {
         </div>
       )}
 
-      {/* 투두비 지니 리워드 팝업 */}
-      {showReward && rewardData.mainTask && (
-        <div className="reward-popup-overlay" onClick={closeRewardPopup}>
-          <div className="reward-popup" onClick={(e) => e.stopPropagation()}>
-            <div className="reward-header">
-              <div className="dancing-todobi">
-                <span className="todobi-emoji">🧞‍♂️</span>
-                <div className="sparkles">✨</div>
-              </div>
-              <h2 className="reward-title">축하합니다! 🎉</h2>
-              <button onClick={closeRewardPopup} className="reward-close-btn">✕</button>
-            </div>
-            
-            <div className="reward-content">
-              <div className="achievement-info">
-                <h3>"{rewardData.mainTask.text}" 프로젝트를 완료하셨군요!</h3>
-                <div className="completion-stats">
-                  <span>✅ 완료한 서브태스크: {rewardData.completedSubtasks}개</span>
-                  <span>🎯 총 서브태스크: {rewardData.totalSubtasks}개</span>
-                  <span>📈 달성률: 100%</span>
-                </div>
-              </div>
-              
-              <div className="genie-message">
-                <div className="message-bubble">
-                  <p>🧞‍♂️ 지니 투두비가 소원 하나를 들어드릴게요!</p>
-                  <p>어떤 보상을 받고 싶으신가요?</p>
-                </div>
-              </div>
-              
-              <div className="reward-options">
-                {rewardOptions.map(option => (
-                  <label key={option.id} className="reward-option">
-                    <input
-                      type="radio"
-                      name="reward"
-                      value={option.id}
-                      checked={selectedReward === option.id}
-                      onChange={(e) => setSelectedReward(e.target.value)}
-                    />
-                    <span className="option-content">
-                      <span className="option-emoji">{option.emoji}</span>
-                      <span className="option-text">{option.text}</span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-              
-              <div className="reward-actions">
-                <button 
-                  onClick={confirmReward} 
-                  className="confirm-reward-btn"
-                  disabled={!selectedReward}
-                >
-                  소원을 빌어주세요! 🌟
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
 {/* 일일 요약 툴팁 */}
       {summaryTooltip.show && summaryTooltip.content && (
@@ -2701,6 +2793,53 @@ function App() {
         </div>
       )}
     </div>
+  );
+}
+
+// 인증 상태에 따라 다른 화면을 보여주는 컴포넌트
+function MainApp() {
+  const { user, isLoading, login, logout } = useAuth();
+
+  const handleLoginSuccess = (data: any) => {
+    console.log('Login successful:', data);
+    login(data);
+  };
+
+  const handleLoginError = () => {
+    console.error('Login failed');
+    alert('로그인에 실패했습니다. 다시 시도해 주세요.');
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">로딩 중...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+      }}>
+        <GoogleLogin onSuccess={handleLoginSuccess} onError={handleLoginError} />
+      </div>
+    );
+  }
+
+  return <AuthenticatedApp />;
+}
+
+// 메인 App 컴포넌트 (인증 통합)
+function App() {
+  return (
+    <AuthProvider>
+      <MainApp />
+    </AuthProvider>
   );
 }
 

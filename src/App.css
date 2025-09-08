@@ -1931,15 +1931,15 @@ h1 {
   }
 }
 
-/* 빠른 할일 추가 섹션 */
-.quick-add-section {
+/* 시간별 할일 추가 섹션 */
+.time-add-section {
   background: rgba(255, 255, 255, 0.7);
   border-radius: 12px;
   padding: 10px;
   box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
 }
 
-.quick-add-section h4 {
+.time-add-section h4 {
   color: #2c3e50;
   margin: 0 0 8px 0;
   font-size: 0.9rem;
@@ -1959,13 +1959,30 @@ h1 {
   border-left: 3px solid #74b9ff;
 }
 
-.quick-input-container {
+.time-add-container {
   display: flex;
   gap: 6px;
   margin-bottom: 0;
 }
 
-.quick-todo-input {
+.time-select {
+  padding: 6px 10px;
+  border: 2px solid rgba(116, 185, 255, 0.3);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  background: rgba(255, 255, 255, 0.9);
+  transition: all 0.3s ease;
+  cursor: pointer;
+  min-width: 80px;
+}
+
+.time-select:focus {
+  outline: none;
+  border-color: #74b9ff;
+  box-shadow: 0 0 8px rgba(116, 185, 255, 0.2);
+}
+
+.time-input {
   flex: 1;
   padding: 6px 10px;
   border: 2px solid rgba(116, 185, 255, 0.3);
@@ -1975,19 +1992,19 @@ h1 {
   transition: all 0.3s ease;
 }
 
-.quick-todo-input:focus {
+.time-input:focus {
   outline: none;
   border-color: #74b9ff;
   box-shadow: 0 0 8px rgba(116, 185, 255, 0.2);
 }
 
-.quick-todo-input:disabled {
+.time-input:disabled {
   background: rgba(0, 0, 0, 0.05);
   color: #999;
   cursor: not-allowed;
 }
 
-.quick-add-button {
+.time-add-button {
   padding: 6px 12px;
   background: linear-gradient(135deg, #74b9ff, #0984e3);
   color: white;
@@ -2001,16 +2018,55 @@ h1 {
   min-width: 32px;
 }
 
-.quick-add-button:hover:not(:disabled) {
+.time-add-button:hover:not(:disabled) {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(116, 185, 255, 0.3);
 }
 
-.quick-add-button:disabled {
+.time-add-button:disabled {
   background: #bdc3c7;
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
+}
+
+/* 고아 서브태스크 정리 섹션 */
+.cleanup-section {
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 12px;
+  padding: 10px;
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+  margin-bottom: 16px;
+}
+
+.cleanup-button {
+  width: 100%;
+  padding: 4px 8px;
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  opacity: 0.7;
+}
+
+.cleanup-button:hover {
+  background: linear-gradient(135deg, #c0392b, #a93226);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3);
+  opacity: 1;
+}
+
+.cleanup-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(231, 76, 60, 0.2);
 }
 
 .deadline-summary {
@@ -2540,11 +2596,224 @@ h1 {
   overflow: hidden;
 }
 
-.subtask-progress-fill {
-  height: 100%;
-  background: #74b9ff;
+.subtask-progress-slider {
+  width: 100%;
+  height: 6px;
   border-radius: 3px;
-  transition: width 0.3s ease;
+  background: linear-gradient(to right, #74b9ff 0%, #74b9ff var(--progress, 0%), #ddd var(--progress, 0%), #ddd 100%);
+  outline: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+.subtask-progress-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #74b9ff;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.subtask-progress-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #74b9ff;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+/* 서브태스크 요구사항 섹션 스타일 */
+.subtask-requirements-section {
+  border-top: 1px solid #f0f0f0;
+  padding-top: 20px;
+  margin-top: 16px;
+}
+
+.subtask-requirements-section h5 {
+  margin: 0 0 12px 0;
+  font-size: 1rem;
+  color: #2c3e50;
+  font-weight: 600;
+}
+
+.requirements-input {
+  width: 100%;
+  min-height: 60px;
+  padding: 8px;
+  border: 2px solid rgba(255, 165, 0, 0.2);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: #2c3e50;
+  background: rgba(255, 165, 0, 0.02);
+  resize: vertical;
+  transition: all 0.3s ease;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+}
+
+.requirements-input:focus {
+  outline: none;
+  border-color: #ff9500;
+  background: rgba(255, 165, 0, 0.05);
+  box-shadow: 0 0 0 3px rgba(255, 165, 0, 0.1);
+}
+
+.requirements-input::placeholder {
+  color: #a0a0a0;
+  font-style: italic;
+}
+
+.requirements-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.requirements-save-btn {
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #ff9500 0%, #ffad33 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(255, 149, 0, 0.2);
+}
+
+.requirements-save-btn:hover {
+  background: linear-gradient(135deg, #e6850e 0%, #ff9500 100%);
+  box-shadow: 0 3px 8px rgba(255, 149, 0, 0.3);
+  transform: translateY(-1px);
+}
+
+.requirements-hint {
+  font-size: 0.75rem;
+  color: #888;
+  font-style: italic;
+}
+
+/* Google Login 스타일 */
+.google-login-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.google-login-box {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  padding: 40px 50px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  max-width: 400px;
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.login-header {
+  margin-bottom: 30px;
+}
+
+.login-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.login-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #2c3e50;
+  margin-bottom: 8px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.login-subtitle {
+  color: #6b7280;
+  font-size: 1rem;
+  margin-bottom: 0;
+}
+
+.error-message {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 12px;
+  padding: 16px;
+  color: #dc2626;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.loading-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  gap: 12px;
+}
+
+.loading-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid rgba(116, 185, 255, 0.3);
+  border-top: 2px solid #74b9ff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loading-text {
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.login-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.google-button {
+  width: 100%;
+}
+
+.login-terms {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  line-height: 1.4;
+  margin: 0;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 480px) {
+  .google-login-box {
+    padding: 30px 25px;
+    margin: 10px;
+  }
+  
+  .login-icon {
+    font-size: 36px;
+  }
+  
+  .login-title {
+    font-size: 1.4rem;
+  }
 }
 
 /* 서브태스크 메모 섹션 스타일 */
@@ -4020,6 +4289,7 @@ h1 {
   resize: vertical;
   font-family: inherit;
   background: white;
+  box-sizing: border-box;
 }
 
 .ai-requirements-input:focus {

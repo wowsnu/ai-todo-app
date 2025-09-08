@@ -46,7 +46,8 @@ async function analyzeTask(
   fileContents = [], // [{ text: string, images: string[], fileName: string }]
   webContents = [],   // [{ text: string, images: string[], url: string }]
   userRequirements = '', // 사용자 요구사항
-  difficultyLevel = 'normal' // 'easy' | 'normal' | 'hard'
+  difficultyLevel = 'normal', // 'easy' | 'normal' | 'hard'
+  userSchedule = null // { workingHours: { start, end }, busyByDate: { 'YYYY-MM-DD': [{start,end}] }, avoidWeekends, lunchBreak, maxDailyMinutes, timezone }
 ) {
   const startTime = Date.now();
   console.log('🚀 analyzeTask 함수 호출됨!');
@@ -122,9 +123,9 @@ async function analyzeTask(
       }
     }
 
-    // 사용자 요구사항 추가
+    // 사용자 요구사항 추가 (최우선 원칙 명시)
     if (userRequirements) {
-      prompt += `\n\n사용자 요구사항: ${userRequirements}`;
+      prompt += `\n\n[중요] 사용자 추가 요구사항(최우선): ${userRequirements}\n- 위 요구사항은 모든 규칙보다 우선 적용됩니다. 다른 조건과 충돌 시 사용자의 요구사항을 따르세요.`;
     }
 
     // 난이도 설정에 따른 상세 안내
@@ -166,7 +167,9 @@ async function analyzeTask(
       "time": "09:00",
       "date": "2025-08-28"
     }
-  ]
+  ],
+  "assumptions": ["선택 필드. 불확실한 가정 사항"],
+  "missingInfo": ["선택 필드. 부족한 정보"]
 }
 
 **중요: 과제를 잘 파악하여 효율적으로 서브태스크를 만들어주세요**
@@ -174,6 +177,7 @@ async function analyzeTask(
 **사용자 요구사항과 난이도 설정을 반드시 고려하여 계획을 수립하세요**
 
 요구사항:
+- [최우선] 사용자 추가 요구사항을 반드시 준수하세요. 다른 규칙과 충돌하면 사용자 요구사항을 우선 적용합니다.
 - 서브태스크는 3-7개 정도로 적절하게 나누기
 - 각 서브태스크는 실행 가능하고 구체적이어야 함
 - **난이도 설정에 맞게 적절한 작업량으로 나누기**
@@ -183,7 +187,8 @@ async function analyzeTask(
   * 예: 5일 남았다면 1일차, 2일차, 3일차, 4일차, 5일차(마감일)에 골고루 배분
 - **사용자 요구사항을 반드시 준수하고 난이도 설정에 맞는 작업량과 속도로 계획하기**
 - 우선순위와 순서를 논리적으로 배치하되, 날짜 분산을 최우선 고려
-- 한국어로 응답하기
+ - 한국어로 응답하기
+ - 참고: 시간(date/time)은 서버에서 사용자의 기존 일정과 가용 시간에 맞춰 재배치될 수 있습니다. time/date를 제공하더라도 서버가 조정할 수 있습니다.
 
 `;
 
@@ -196,14 +201,16 @@ async function analyzeTask(
       messages: [
         {
           role: "system",
-          content: "당신은 프로젝트를 효율적으로 관리하는 전문가입니다. 과제를 적절한 서브태스크로 나누고, 마감기한 내에 효율적으로 처리할 수 있도록 현실적이고 실행 가능한 가이드라인을 제공합니다. 첨부된 파일(텍스트, 직접 업로드한 이미지, PDF, Word 등)과 웹사이트 내용을 종합적으로 분석하여 구체적이고 실용적인 계획을 수립해주세요. 업로드된 이미지의 차트, 다이어그램, 계획표, 스크린샷, 요구사항 등의 시각적 정보를 매우 적극적으로 활용해주세요."
+          content: "당신은 프로젝트를 효율적으로 관리하는 전문가입니다. 과제를 적절한 서브태스크로 나누고, 마감기한 내에 효율적으로 처리할 수 있도록 현실적이고 실행 가능한 가이드라인을 제공합니다. 첨부된 파일(텍스트, 직접 업로드한 이미지, PDF, Word 등)과 웹사이트 내용을 종합적으로 분석하여 구체적이고 실용적인 계획을 수립해주세요. 업로드된 이미지의 차트, 다이어그램, 계획표, 스크린샷, 요구사항 등의 시각적 정보를 매우 적극적으로 활용해주세요. 반드시 JSON만 출력하세요. 특히, 사용자 추가 요구사항이 제공되면 이를 최우선으로 준수하며, 다른 규칙과 충돌 시 사용자 요구사항을 우선 적용합니다."
         },
         {
           role: "user",
           content: prompt
         }
       ],
-      max_completion_tokens: 2000
+      max_completion_tokens: 2000,
+      temperature: 0.2,
+      response_format: { type: 'json_object' }
     });
 
     const responseTime = Date.now();
@@ -283,6 +290,31 @@ async function analyzeTask(
       ...subtask,
       id: `ai-subtask-${Date.now()}-${index}`
     }));
+
+    // 사용자의 일정 정보를 바탕으로 비어있는 시간대에 서브태스크 배치
+    try {
+      const scheduled = scheduleSubtasksIntoCalendar(
+        analysis.suggestedSubtasks,
+        {
+          startDate: todayString,
+          deadline: deadline || null,
+          userSchedule
+        }
+      );
+      analysis.suggestedSubtasks = scheduled.subtasks;
+      if (scheduled.assumptions?.length) {
+        analysis.assumptions = Array.isArray(analysis.assumptions)
+          ? [...analysis.assumptions, ...scheduled.assumptions]
+          : scheduled.assumptions;
+      }
+      if (scheduled.missingInfo?.length) {
+        analysis.missingInfo = Array.isArray(analysis.missingInfo)
+          ? [...analysis.missingInfo, ...scheduled.missingInfo]
+          : scheduled.missingInfo;
+      }
+    } catch (scheduleErr) {
+      console.warn('일정 배치 실패. AI 제공 시간/날짜 사용 또는 기본값 유지:', scheduleErr?.message || scheduleErr);
+    }
 
     return analysis;
 
@@ -406,3 +438,238 @@ module.exports = {
   analyzeImage,
   warmupAI
 };
+
+// ====== Scheduling Helpers ======
+function parseTimeToMinutes(t) {
+  const [h, m] = (t || '00:00').split(':').map(Number);
+  return h * 60 + (m || 0);
+}
+
+function formatMinutesToTime(mins) {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function addDays(dateStr, days) {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().split('T')[0];
+}
+
+function isWeekend(dateStr) {
+  const d = new Date(dateStr);
+  const day = d.getDay();
+  return day === 0 || day === 6;
+}
+
+function mergeIntervals(intervals) {
+  if (!intervals || intervals.length === 0) return [];
+  const sorted = intervals
+    .map(i => ({ start: parseTimeToMinutes(i.start), end: parseTimeToMinutes(i.end) }))
+    .filter(i => i.end > i.start)
+    .sort((a, b) => a.start - b.start);
+  const merged = [];
+  for (const cur of sorted) {
+    if (merged.length === 0 || cur.start > merged[merged.length - 1].end) {
+      merged.push({ ...cur });
+    } else {
+      merged[merged.length - 1].end = Math.max(merged[merged.length - 1].end, cur.end);
+    }
+  }
+  return merged.map(i => ({ start: formatMinutesToTime(i.start), end: formatMinutesToTime(i.end) }));
+}
+
+function subtractBusyFromWorking(working, busy) {
+  // working: [{start,end}] busy: [{start,end}]
+  const result = [];
+  const work = mergeIntervals(working).map(i => ({ s: parseTimeToMinutes(i.start), e: parseTimeToMinutes(i.end) }));
+  const bz = mergeIntervals(busy).map(i => ({ s: parseTimeToMinutes(i.start), e: parseTimeToMinutes(i.end) }));
+  for (const w of work) {
+    let free = [{ s: w.s, e: w.e }];
+    for (const b of bz) {
+      const next = [];
+      for (const f of free) {
+        // no overlap
+        if (b.e <= f.s || b.s >= f.e) {
+          next.push(f);
+          continue;
+        }
+        // cut left
+        if (b.s > f.s) next.push({ s: f.s, e: Math.max(f.s, Math.min(b.s, f.e)) });
+        // cut right
+        if (b.e < f.e) next.push({ s: Math.max(f.s, Math.min(b.e, f.e)), e: f.e });
+      }
+      free = next.filter(x => x.e - x.s > 0);
+    }
+    result.push(...free);
+  }
+  // back to HH:MM
+  return result
+    .filter(i => i.e - i.s > 0)
+    .sort((a, b) => a.s - b.s)
+    .map(i => ({ start: formatMinutesToTime(i.s), end: formatMinutesToTime(i.e) }));
+}
+
+function scheduleSubtasksIntoCalendar(subtasks, options) {
+  const assumptions = [];
+  const missingInfo = [];
+  const ordered = [...subtasks].sort((a, b) => (a.order || 0) - (b.order || 0));
+
+  const startDate = options.startDate;
+  const deadline = options.deadline; // may be null
+  const cfg = options.userSchedule || {};
+  const tz = cfg.timezone || 'Asia/Seoul'; // currently informational only
+
+  const avoidWeekends = cfg.avoidWeekends === true; // default false (주말 회피 안 함)
+  const workingHours = cfg.workingHours || { start: '09:00', end: '18:00' };
+  const lunchBreak = cfg.lunchBreak || { start: '12:00', end: '13:00' };
+  const maxDailyMinutes = typeof cfg.maxDailyMinutes === 'number' ? cfg.maxDailyMinutes : null;
+  const busyByDate = cfg.busyByDate || {}; // { 'YYYY-MM-DD': [{start,end}] }
+
+  if (!cfg.workingHours) {
+    assumptions.push('기본 근무시간(09:00-18:00)을 사용했습니다.');
+  }
+  if (!cfg.lunchBreak) {
+    assumptions.push('점심시간(12:00-13:00) 기본 차단을 적용했습니다.');
+  }
+  if (!deadline) {
+    assumptions.push('마감기한이 없어 순차적으로 다음 날로 넘기며 배치합니다.');
+  }
+
+  const placeOnDate = (dateStr, remaining, placedTodayMinutes, dailyCapMinutes = null) => {
+    const baseWorking = [{ start: workingHours.start, end: workingHours.end }];
+    const baseBusy = [];
+    if (lunchBreak && lunchBreak.start && lunchBreak.end) baseBusy.push(lunchBreak);
+    if (busyByDate[dateStr]) baseBusy.push(...busyByDate[dateStr]);
+
+    let free = subtractBusyFromWorking(baseWorking, baseBusy)
+      .map(i => ({ s: parseTimeToMinutes(i.start), e: parseTimeToMinutes(i.end) }));
+
+    let usedToday = placedTodayMinutes || 0;
+    const scheduled = [];
+
+    for (const item of remaining) {
+      if ((maxDailyMinutes !== null && usedToday >= maxDailyMinutes) ||
+          (typeof dailyCapMinutes === 'number' && usedToday >= dailyCapMinutes)) break;
+      const need = Math.max(5, Number(item.estimatedDuration || 0));
+      let placed = false;
+      for (let fi = 0; fi < free.length; fi++) {
+        const block = free[fi];
+        const globalCap = maxDailyMinutes !== null ? Math.max(0, maxDailyMinutes - usedToday) : Infinity;
+        const limitCap = typeof dailyCapMinutes === 'number' ? Math.max(0, dailyCapMinutes - usedToday) : Infinity;
+        const cap = Math.min(globalCap, limitCap);
+        const available = Math.min(block.e - block.s, cap);
+        if (available >= need) {
+          const start = block.s;
+          const end = start + need;
+          scheduled.push({ item, date: dateStr, start, end });
+          // shrink block
+          if (end < block.e) {
+            free[fi] = { s: end, e: block.e };
+          } else {
+            free.splice(fi, 1);
+            fi--;
+          }
+          usedToday += need;
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) {
+        // can't place today
+        break;
+      }
+    }
+
+    return { scheduled, usedToday };
+  };
+
+  let dayIndex = 0;
+  const placed = [];
+  const queue = [...ordered];
+  const sumRemaining = (arr) => arr.reduce((s, x) => s + Math.max(0, Number(x.estimatedDuration || 0)), 0);
+  const daysUntil = (from, to) => {
+    if (!to) return 1;
+    let count = 0;
+    let i = 0;
+    while (true) {
+      const d = addDays(from, i);
+      if (avoidWeekends && isWeekend(d)) { i += 1; continue; }
+      count += 1;
+      if (new Date(d).toDateString() === new Date(to).toDateString()) break;
+      i += 1;
+      if (i > 120) break; // safety
+    }
+    return Math.max(1, count);
+  };
+  while (queue.length > 0) {
+    const day = addDays(startDate, dayIndex);
+    if (avoidWeekends && isWeekend(day)) {
+      dayIndex += 1;
+      continue;
+    }
+    if (deadline && new Date(day) > new Date(deadline)) {
+      assumptions.push('일부 작업이 마감일 이후로 배치될 수 있습니다.');
+    }
+
+    // 균등 분배 목표 계산
+    const remainingTotal = sumRemaining(queue);
+    let remainingDays = 1;
+    if (deadline && new Date(day) <= new Date(deadline)) {
+      remainingDays = daysUntil(day, deadline);
+    }
+    let targetToday = Math.ceil(remainingTotal / remainingDays);
+    if (maxDailyMinutes !== null) targetToday = Math.min(targetToday, maxDailyMinutes);
+
+    const { scheduled } = placeOnDate(day, queue, 0, targetToday);
+    if (scheduled.length === 0) {
+      // no room, try next day
+      dayIndex += 1;
+      continue;
+    }
+    // remove placed items from queue
+    for (const s of scheduled) {
+      const idx = queue.indexOf(s.item);
+      if (idx !== -1) queue.splice(idx, 1);
+      placed.push(s);
+    }
+    dayIndex += 1;
+    // if deadline is set, stop if we've gone too far (hard stop of 60 days to avoid infinite)
+    if (dayIndex > 60) break;
+  }
+
+  const mapped = ordered.map(item => {
+    const p = placed.find(x => x.item === item);
+    if (!p) {
+      return {
+        ...item,
+        time: item.time || '09:00',
+        date: item.date || startDate
+      };
+    }
+    return {
+      ...item,
+      time: formatMinutesToTime(p.start),
+      date: p.date
+    };
+  });
+
+  // Basic validation of total time
+  const totalDur = (ordered || []).reduce((sum, s) => sum + Math.max(0, Number(s.estimatedDuration || 0)), 0);
+  const byDate = mapped.reduce((acc, s) => {
+    const d = s.date || startDate;
+    const t = Number(s.estimatedDuration || 0);
+    acc[d] = (acc[d] || 0) + t;
+    return acc;
+  }, {});
+  if (maxDailyMinutes !== null) {
+    for (const [d, mins] of Object.entries(byDate)) {
+      if (mins > maxDailyMinutes + 5) {
+        assumptions.push(`일정 배치 결과 ${d}의 총 작업량이 선호치(${maxDailyMinutes}분)를 초과했습니다.`);
+      }
+    }
+  }
+
+  return { subtasks: mapped, assumptions, missingInfo };
+}

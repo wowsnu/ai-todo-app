@@ -19,6 +19,20 @@ export interface TaskAnalysis {
 }
 
 class AIService {
+  // Get auth token from localStorage
+  private getAuthToken(): string | null {
+    return localStorage.getItem('auth_token');
+  }
+
+  // Create authorization headers
+  private getAuthHeaders(): HeadersInit {
+    const token = this.getAuthToken();
+    return {
+      'Content-Type': 'application/json',
+      ...(token && { 'Authorization': `Bearer ${token}` })
+    };
+  }
+
   /**
    * Main Task를 분석하여 서브태스크를 생성합니다 (백엔드 API 호출)
    */
@@ -29,7 +43,15 @@ class AIService {
     uploadedFiles?: File[],
     uploadedLinks?: string[],
     userRequirements?: string,
-    difficultyLevel?: 'easy' | 'normal' | 'hard'
+    difficultyLevel?: 'easy' | 'normal' | 'hard',
+    userSchedule?: {
+      timezone?: string;
+      workingHours?: { start: string; end: string };
+      busyByDate?: Record<string, { start: string; end: string }[]>;
+      avoidWeekends?: boolean;
+      lunchBreak?: { start: string; end: string } | null;
+      maxDailyMinutes?: number | null;
+    }
   ): Promise<TaskAnalysis> {
     try {
       console.log('AI 분석 시작 (백엔드 호출):', mainTaskTitle);
@@ -70,9 +92,7 @@ class AIService {
       // 백엔드 API 호출
       const response = await fetch(`${API_BASE_URL}/analyze-task`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: this.getAuthHeaders(),
         body: JSON.stringify({
           mainTaskTitle,
           description,
@@ -80,7 +100,8 @@ class AIService {
           fileContents,
           webContents,
           userRequirements: userRequirements || '',
-          difficultyLevel: difficultyLevel || 'normal'
+          difficultyLevel: difficultyLevel || 'normal',
+          userSchedule: userSchedule || null
         }),
       });
 

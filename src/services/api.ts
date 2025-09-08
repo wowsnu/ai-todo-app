@@ -13,9 +13,25 @@ export interface DailySummary {
 }
 
 class ApiService {
+  // Get auth token from localStorage
+  private getAuthToken(): string | null {
+    return localStorage.getItem('auth_token');
+  }
+
+  // Create authorization headers
+  private getAuthHeaders(): HeadersInit {
+    const token = this.getAuthToken();
+    return {
+      'Content-Type': 'application/json',
+      ...(token && { 'Authorization': `Bearer ${token}` })
+    };
+  }
+
   // Todo API methods
   async getTodos(): Promise<TodoData[]> {
-    const response = await fetch(`${API_BASE_URL}/todos`);
+    const response = await fetch(`${API_BASE_URL}/todos`, {
+      headers: this.getAuthHeaders()
+    });
     if (!response.ok) throw new Error('Failed to fetch todos');
     const data = await response.json();
     return data as TodoData[];
@@ -48,9 +64,7 @@ class ApiService {
     
     const response = await fetch(`${API_BASE_URL}/todos`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: this.getAuthHeaders(),
       body: JSON.stringify(todoWithDefaults),
     });
     
@@ -61,9 +75,7 @@ class ApiService {
   async updateTodo(id: string, updates: Partial<TodoData>): Promise<void> {
     const response = await fetch(`${API_BASE_URL}/todos/${id}`, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: this.getAuthHeaders(),
       body: JSON.stringify(updates),
     });
     
@@ -73,6 +85,7 @@ class ApiService {
   async deleteTodo(id: string): Promise<{ message: string }> {
     const response = await fetch(`${API_BASE_URL}/todos/${id}`, {
       method: 'DELETE',
+      headers: this.getAuthHeaders(),
     });
     
     if (!response.ok) throw new Error('Failed to delete todo');
@@ -95,9 +108,7 @@ class ApiService {
   async saveDailySummary(summary: DailySummary): Promise<{ date: string; message: string }> {
     const response = await fetch(`${API_BASE_URL}/daily-summaries`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: this.getAuthHeaders(),
       body: JSON.stringify(summary),
     });
     
@@ -108,6 +119,7 @@ class ApiService {
   async calculateDailySummary(date: string): Promise<DailySummary> {
     const response = await fetch(`${API_BASE_URL}/calculate-daily-summary/${date}`, {
       method: 'POST',
+      headers: this.getAuthHeaders(),
     });
     
     if (!response.ok) throw new Error('Failed to calculate daily summary');
