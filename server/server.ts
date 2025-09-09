@@ -6,7 +6,36 @@ import { Database } from 'sqlite3';
 import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 
-dotenv.config({ path: path.join(__dirname, '.env') });
+// Try to load .env from multiple locations
+const envPaths = [
+  path.join(__dirname, '.env'),      // dist/.env (built)
+  path.join(__dirname, '..', '.env') // server/.env (development)
+];
+
+let envLoaded = false;
+for (const envPath of envPaths) {
+  try {
+    dotenv.config({ path: envPath });
+    console.log(`✅ Environment loaded from: ${envPath}`);
+    envLoaded = true;
+    break;
+  } catch (error) {
+    console.log(`⚠️ Could not load env from: ${envPath}`);
+  }
+}
+
+if (!envLoaded) {
+  console.warn('⚠️ No .env file found, using system environment variables');
+}
+
+// Validate required environment variables
+if (!process.env.GOOGLE_CLIENT_ID) {
+  console.error('❌ Missing GOOGLE_CLIENT_ID environment variable');
+  console.log('Available env vars:', Object.keys(process.env).filter(key => key.includes('GOOGLE')));
+} else {
+  console.log('✅ GOOGLE_CLIENT_ID loaded:', process.env.GOOGLE_CLIENT_ID.substring(0, 20) + '...');
+}
+
 const aiService = require('./aiService');
 
 const app = express();

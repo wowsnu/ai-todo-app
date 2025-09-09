@@ -75,6 +75,10 @@ jobs:
           sudo npm run build
           cd server && sudo npm run build && cd ..
           
+          # Copy .env to dist directory for runtime
+          echo "📁 Copying environment files..."
+          sudo cp server/.env server/dist/.env
+          
           # Environment variables management
           echo "🔧 Managing environment variables..."
           if [ ! -f server/.env ]; then
