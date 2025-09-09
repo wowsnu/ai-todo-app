@@ -83,8 +83,13 @@ jobs:
           echo "🗄️ Setting up database..."
           sudo mkdir -p server/dist
           sudo touch server/dist/database.sqlite
-          sudo chown ubuntu:ubuntu server/dist/database.sqlite
+          
+          # Set comprehensive permissions for SQLite
+          sudo chown -R ubuntu:ubuntu /opt/ai-todo-app
+          sudo chmod 777 server/dist
           sudo chmod 666 server/dist/database.sqlite
+          
+          echo "✅ Database permissions set"
           
           # Environment variables management
           echo "🔧 Managing environment variables..."

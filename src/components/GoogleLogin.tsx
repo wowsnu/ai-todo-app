@@ -1,4 +1,5 @@
 import React, { useEffect, useCallback } from 'react';
+import { apiService } from '../services/api';
 
 declare global {
   interface Window {
@@ -29,16 +30,7 @@ const GoogleLogin: React.FC<GoogleLoginProps> = ({ onSuccess, onError }) => {
       console.log("Google credential response:", response);
       
       // Send the Google token to our backend for verification
-      const API_BASE = process.env.REACT_APP_API_BASE_URL || 'http://localhost:3001/api';
-      const backendResponse = await fetch(`${API_BASE}/auth/google`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token: response.credential
-        }),
-      });
+      const backendResponse = await apiService.authenticateWithGoogle(response.credential);
 
       if (backendResponse.ok) {
         const data = await backendResponse.json();

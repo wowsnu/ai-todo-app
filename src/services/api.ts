@@ -147,6 +147,19 @@ class ApiService {
     return date.toISOString().split('T')[0];
   }
 
+  // Google authentication
+  async authenticateWithGoogle(token: string): Promise<Response> {
+    return fetch(`${API_BASE_URL}/auth/google`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        token: token
+      }),
+    });
+  }
+
 }
 
 export const apiService = new ApiService();
