@@ -6,35 +6,50 @@ import { Database } from 'sqlite3';
 import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 
-// Try to load .env from multiple locations
+// Try to load .env from multiple locations (system env takes priority)
 const envPaths = [
   path.join(__dirname, '.env'),      // dist/.env (built)
   path.join(__dirname, '..', '.env') // server/.env (development)
 ];
 
-let envLoaded = false;
+let envLoadedFrom = 'system environment';
 for (const envPath of envPaths) {
   try {
-    dotenv.config({ path: envPath });
-    console.log(`✅ Environment loaded from: ${envPath}`);
-    envLoaded = true;
-    break;
+    const result = dotenv.config({ path: envPath, override: false });
+    if (!result.error) {
+      envLoadedFrom = envPath;
+      console.log(`📁 Loaded env from: ${envPath}`);
+      break;
+    }
   } catch (error) {
-    console.log(`⚠️ Could not load env from: ${envPath}`);
+    // Silent fail, try next path
   }
 }
 
-if (!envLoaded) {
-  console.warn('⚠️ No .env file found, using system environment variables');
+// Validate required environment variables (fail-fast approach)
+const requiredEnvVars = [
+  'GOOGLE_CLIENT_ID',
+  'JWT_SECRET', 
+  'OPENAI_API_KEY'
+];
+
+const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+if (missingVars.length > 0) {
+  console.error('❌ CRITICAL: Missing required environment variables:');
+  missingVars.forEach(varName => {
+    console.error(`   - ${varName}: MISSING`);
+  });
+  console.error('💡 Set these via PM2 environment or .env file');
+  process.exit(1);
 }
 
-// Validate required environment variables
-if (!process.env.GOOGLE_CLIENT_ID) {
-  console.error('❌ Missing GOOGLE_CLIENT_ID environment variable');
-  console.log('Available env vars:', Object.keys(process.env).filter(key => key.includes('GOOGLE')));
-} else {
-  console.log('✅ GOOGLE_CLIENT_ID loaded:', process.env.GOOGLE_CLIENT_ID.substring(0, 20) + '...');
-}
+// Log successful validation (without values for security)
+console.log('✅ Environment validation passed:');
+requiredEnvVars.forEach(varName => {
+  console.log(`   - ${varName}: OK`);
+});
+console.log(`📍 Environment source: ${envLoadedFrom}`);
 
 const aiService = require('./aiService');
 

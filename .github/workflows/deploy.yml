@@ -81,25 +81,50 @@ jobs:
           
           # Environment variables management
           echo "🔧 Managing environment variables..."
+          
+          # Create PM2 ecosystem file with environment variables (preferred method)
+          echo "Creating PM2 ecosystem configuration..."
+          sudo tee ecosystem.config.js > /dev/null << 'EOF'
+          module.exports = {
+            apps: [{
+              name: 'ai-todo-backend',
+              script: './server/dist/server.js',
+              env_production: {
+                NODE_ENV: 'production',
+                PORT: 2222,
+                GOOGLE_CLIENT_ID: '${{ secrets.GOOGLE_CLIENT_ID }}',
+                JWT_SECRET: '${{ secrets.JWT_SECRET }}',
+                OPENAI_API_KEY: '${{ secrets.OPENAI_API_KEY }}'
+              }
+            }]
+          };
+          EOF
+          
+          # Create backup .env file (fallback)
           if [ ! -f server/.env ]; then
-            echo "Creating new .env file..."
+            echo "Creating backup .env file..."
             sudo mkdir -p server
             echo "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" | sudo tee server/.env > /dev/null
             echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" | sudo tee -a server/.env > /dev/null
+            echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" | sudo tee -a server/.env > /dev/null
             echo "PORT=2222" | sudo tee -a server/.env > /dev/null
             echo "NODE_ENV=production" | sudo tee -a server/.env > /dev/null
-            echo "✅ Environment file created"
+            echo "✅ Backup .env file created"
           else
             echo ".env file already exists, keeping existing configuration"
           fi
           
-          # PM2 restart with better error handling
+          # PM2 restart with ecosystem configuration (preferred method)
           echo "🔄 Restarting PM2 processes..."
           if pm2 list | grep -q "ai-todo-backend"; then
-            pm2 restart ai-todo-backend
-          else
-            pm2 start server/dist/server.js --name "ai-todo-backend"
+            echo "Stopping existing process..."
+            pm2 stop ai-todo-backend
+            pm2 delete ai-todo-backend
           fi
+          
+          echo "Starting with ecosystem configuration..."
+          pm2 start ecosystem.config.js --env production
+          pm2 save
           
           # Health check
           echo "🏥 Performing health check..."
