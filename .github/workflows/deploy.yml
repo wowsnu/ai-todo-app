@@ -79,6 +79,13 @@ jobs:
           echo "📁 Copying environment files..."
           sudo cp server/.env server/dist/.env
           
+          # Create database directory and set permissions
+          echo "🗄️ Setting up database..."
+          sudo mkdir -p server/dist
+          sudo touch server/dist/database.sqlite
+          sudo chown ubuntu:ubuntu server/dist/database.sqlite
+          sudo chmod 666 server/dist/database.sqlite
+          
           # Environment variables management
           echo "🔧 Managing environment variables..."
           
