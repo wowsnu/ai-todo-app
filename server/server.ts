@@ -93,7 +93,8 @@ app.use(cors({
     'http://localhost:3000',
     'https://ai-todo-app-gh8l.vercel.app',
     /^https:\/\/.*\.vercel\.app$/,  // 모든 Vercel 도메인 허용 (preview URLs)
-    'http://43.203.188.214:2222'
+    'http://43.203.188.214:2222',
+    'https://todooby.duckdns.org'  // 새 도메인 추가
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
