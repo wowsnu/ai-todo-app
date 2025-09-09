@@ -92,7 +92,6 @@ app.use(cors({
   origin: [
     'http://localhost:3000',
     'https://ai-todo-app-gh8l.vercel.app',
-    /^https:\/\/.*\.vercel\.app$/,  // 모든 Vercel 도메인 허용 (preview URLs)
     'http://43.203.188.214:2222',
     'https://todooby.duckdns.org'  // 새 도메인 추가
   ],
@@ -102,19 +101,7 @@ app.use(cors({
   maxAge: 86400
 }));
 // Preflight (OPTIONS) explicit handling to ensure CORS headers are present
-app.options('*', cors({
-  origin: [
-    'http://localhost:3000',
-    'https://ai-todo-app-gh8l.vercel.app',
-    /^https:\/\/.*\.vercel\.app$/,
-    'http://43.203.188.214:2222',
-    'https://todooby.duckdns.org'
-  ],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  maxAge: 86400
-}));
+// Note: CORS middleware above already handles OPTIONS requests
 app.use(express.json({ 
   limit: '200mb'
 }));
