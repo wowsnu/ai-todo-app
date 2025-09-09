@@ -10,9 +10,9 @@ const API_BASE_URL = (() => {
       console.log('🏠 Using local development API');
       return 'http://localhost:3001/api';
     }
-    // Vercel 또는 기타 배포 환경
-    console.log('☁️ Using production API');
-    return 'http://43.203.188.214:2222/api';
+    // Vercel 또는 기타 배포 환경 (Nginx HTTPS 프록시)
+    console.log('☁️ Using production API via HTTPS');
+    return 'https://43.203.188.214/api';
   }
   // SSR 환경 fallback
   return process.env.REACT_APP_API_BASE_URL || 'http://localhost:3001/api';
