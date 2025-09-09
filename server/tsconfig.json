@@ -11,12 +11,14 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
+    "allowJs": true,
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true
   },
   "include": [
-    "**/*.ts"
+    "**/*.ts",
+    "**/*.js"
   ],
   "exclude": [
     "node_modules",
