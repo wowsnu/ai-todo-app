@@ -1,6 +1,22 @@
 import { TodoData } from '../types/todo';
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:3001/api';
+const API_BASE_URL = (() => {
+  // 현재 호스트 기반 자동 감지
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    console.log(`🌐 Detected hostname: ${hostname}`);
+    
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      console.log('🏠 Using local development API');
+      return 'http://localhost:3001/api';
+    }
+    // Vercel 또는 기타 배포 환경
+    console.log('☁️ Using production API');
+    return 'http://43.203.188.214:2222/api';
+  }
+  // SSR 환경 fallback
+  return process.env.REACT_APP_API_BASE_URL || 'http://localhost:3001/api';
+})();
 
 export interface DailySummary {
   date: string;

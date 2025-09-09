@@ -88,7 +88,17 @@ async function authenticateToken(req: AuthRequest, res: express.Response, next: 
 
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: [
+    'http://localhost:3000',
+    'https://ai-todo-app-gh8l.vercel.app',
+    /^https:\/\/.*\.vercel\.app$/,  // 모든 Vercel 도메인 허용 (preview URLs)
+    'http://43.203.188.214:2222'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json({ 
   limit: '200mb'
 }));
