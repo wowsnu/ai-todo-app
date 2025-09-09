@@ -12,7 +12,7 @@ const API_BASE_URL = (() => {
     }
     // Vercel 또는 기타 배포 환경 (Nginx HTTPS 프록시)
     console.log('☁️ Using production API via HTTPS');
-    return 'https://43.203.188.214/api';
+    return 'https://todooby.duckdns.org/api';
   }
   // SSR 환경 fallback
   return process.env.REACT_APP_API_BASE_URL || 'http://localhost:3001/api';
