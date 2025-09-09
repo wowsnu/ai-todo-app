@@ -103,7 +103,7 @@ jobs:
               script: './server/dist/server.js',
               env_production: {
                 NODE_ENV: 'production',
-                PORT: 2222,
+                PORT: 3001,
                 GOOGLE_CLIENT_ID: '${{ secrets.GOOGLE_CLIENT_ID }}',
                 JWT_SECRET: '${{ secrets.JWT_SECRET }}',
                 OPENAI_API_KEY: '${{ secrets.OPENAI_API_KEY }}'
@@ -119,7 +119,7 @@ jobs:
             echo "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" | sudo tee server/.env > /dev/null
             echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" | sudo tee -a server/.env > /dev/null
             echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" | sudo tee -a server/.env > /dev/null
-            echo "PORT=2222" | sudo tee -a server/.env > /dev/null
+            echo "PORT=3001" | sudo tee -a server/.env > /dev/null
             echo "NODE_ENV=production" | sudo tee -a server/.env > /dev/null
             echo "✅ Backup .env file created"
           else
@@ -141,7 +141,7 @@ jobs:
           # Health check
           echo "🏥 Performing health check..."
           sleep 5
-          if curl -f http://localhost:2222/api/health 2>/dev/null; then
+          if curl -f http://localhost:3001/api/health 2>/dev/null; then
             echo "✅ Health check passed"
           else
             echo "⚠️ Health check failed, but deployment completed"
