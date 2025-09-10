@@ -105,8 +105,15 @@ npm start
 ```
 
 ### 5. 애플리케이션 접속
+
+#### 🏠 로컬 개발환경
 - **프론트엔드**: http://localhost:3000
 - **백엔드 API**: http://localhost:3001
+
+#### 🌐 운영 환경 (Production)
+- **프론트엔드**: https://ai-todo-app-gh8l.vercel.app
+- **백엔드 API**: https://todooby.duckdns.org/api
+- **도메인**: todooby.duckdns.org (DuckDNS 무료 도메인)
 
 ## 📁 프로젝트 구조
 
@@ -213,6 +220,32 @@ docker run -p 3000:3000 -p 3001:3001 --env-file server/.env ai-todo-app
 - 태스크 제목, 내용, 메모 통합 검색
 - 태그 기반 필터링
 - 날짜 범위별 검색
+
+## 🚀 배포 아키텍처
+
+### 운영 환경 인프라
+```
+GitHub → GitHub Actions → AWS EC2 → Nginx → PM2 → Node.js
+                ↓
+             Vercel (Frontend)
+```
+
+### 자동 배포 프로세스
+1. **main 브랜치 푸시** → GitHub Actions 트리거
+2. **빌드 & 테스트** → 종속성 설치, TypeScript 컴파일
+3. **EC2 배포** → SSH 접속, 코드 업데이트, PM2 재시작
+4. **Health Check** → API 상태 확인
+5. **SSL 인증서** → Let's Encrypt 자동 갱신
+
+### 환경 변수 관리
+- **개발환경**: `.env` 파일
+- **운영환경**: GitHub Actions Secrets → PM2 ecosystem.config.js
+- **보안**: 모든 민감 정보는 암호화된 상태로 관리
+
+### 도메인 및 SSL
+- **무료 도메인**: DuckDNS (todooby.duckdns.org)
+- **SSL 인증서**: Let's Encrypt (3개월 자동 갱신)
+- **보안 등급**: A+ (SSL Labs)
 
 ## 🤝 기여하기
 

@@ -4,10 +4,20 @@
 AI Todo App with React frontend, Node.js backend, SQLite database, and OpenAI GPT integration. Three-panel UI design: left (daily schedule), center (main tasks), right (AI analysis).
 
 ## Technical Stack
-- Frontend: React + TypeScript + TailwindCSS
-- Backend: Node.js + Express + SQLite
-- AI Integration: OpenAI GPT-4o with vision capabilities
-- Database: SQLite with todos and daily_summaries tables
+- **Frontend**: React + TypeScript + TailwindCSS (Deployed on Vercel)
+- **Backend**: Node.js + Express + SQLite (Deployed on AWS EC2)
+- **AI Integration**: OpenAI GPT-4o with vision capabilities
+- **Database**: SQLite with todos and daily_summaries tables
+- **Infrastructure**: Nginx + Let's Encrypt SSL, PM2 Process Manager
+- **Authentication**: Google OAuth 2.0 integration
+
+## Production Deployment Architecture
+- **Frontend URL**: https://ai-todo-app-gh8l.vercel.app
+- **Backend API**: https://todooby.duckdns.org/api
+- **Domain**: todooby.duckdns.org (DuckDNS free domain)
+- **SSL Certificate**: Let's Encrypt (auto-renewed)
+- **Server**: AWS EC2 Ubuntu (SSH port 2222, App port 3001)
+- **Proxy**: Nginx reverse proxy (80/443 → 3001)
 
 ## Key Features Implemented
 
@@ -465,6 +475,45 @@ PORT=3001
 REACT_APP_GOOGLE_CLIENT_ID=your_google_client_id_here
 REACT_APP_API_BASE_URL=http://localhost:3001
 ```
+
+## 최신 배포 및 인프라 개선사항 (2025-09-09)
+
+### 🚀 Production Deployment 완료
+- **완전한 CI/CD 파이프라인**: GitHub Actions → AWS EC2 자동 배포
+- **HTTPS 보안**: Let's Encrypt SSL 인증서로 완전한 HTTPS 구현
+- **Google OAuth 운영 환경**: Mixed Content 문제 해결, 완전한 보안 인증
+- **도메인 설정**: todooby.duckdns.org 무료 도메인 + DNS 구성
+
+### 🔧 인프라 아키텍처
+```
+Vercel (Frontend)     →  Nginx (EC2)     →  PM2 (Backend)
+HTTPS                 →  HTTPS Proxy     →  Node.js:3001
+ai-todo-app.vercel.app   todooby.duckdns.org   localhost:3001
+```
+
+### 📋 배포 프로세스 자동화
+- **GitHub Actions**: main 브랜치 푸시 시 자동 배포
+- **환경 변수 관리**: GitHub Secrets → PM2 ecosystem.config.js
+- **Build & Deploy**: TypeScript 컴파일, 종속성 설치, PM2 재시작
+- **Health Check**: 배포 후 API 상태 확인
+
+### 🛠️ 해결된 주요 기술 문제들
+1. **CORS 설정**: Vercel 도메인과 모든 허용 도메인 추가
+2. **Mixed Content**: HTTPS → HTTPS 통신으로 보안 문제 해결
+3. **path-to-regexp 오류**: Express 와일드카드 라우트 호환성 문제 해결
+4. **환경변수 관리**: .env 파일과 GitHub Actions Secrets 동기화
+5. **포트 구성**: SSH(2222), App(3001), Nginx(80/443) 명확한 분리
+
+### 🔐 Google OAuth 완전 구현
+- **개발환경**: localhost:3000
+- **운영환경**: https://ai-todo-app-gh8l.vercel.app
+- **API 인증**: https://todooby.duckdns.org/api/auth/google
+- **JWT 토큰**: 30일 유효기간, localStorage 저장
+
+### 📊 성능 및 모니터링
+- **PM2 프로세스 관리**: 자동 재시작, 로그 관리, 메모리 모니터링
+- **AI 서비스 워밍업**: 서버 시작 시 OpenAI API 연결 준비
+- **SSL 성능**: TLS 1.3, HTTP/2 지원
 
 ## 기술적 개선사항
 

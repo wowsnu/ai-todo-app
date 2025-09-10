@@ -151,7 +151,8 @@ jobs:
           pm2 status
           
           echo "✅ Deployment completed successfully!"
-          echo "🌐 App is running at http://${{ secrets.EC2_HOST }}:2222"
+          echo "🌐 Frontend: https://ai-todo-app-gh8l.vercel.app"
+          echo "🔧 Backend API: https://todooby.duckdns.org/api"
 
     - name: Deployment Status
       if: always()
