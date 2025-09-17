@@ -2376,11 +2376,11 @@ function AuthenticatedApp() {
         {/* 오른쪽 컬럼: 상세 분석 */}
         <div className="right-column">
           {selectedTodo ? (
-            <>
+            <div>
               <div className="detail-header">
                 <div className="detail-header-content">
                   <h3>할일 상세 분석</h3>
-                  <button 
+                  <button
                     onClick={() => setSelectedTodo(null)}
                     className="close-detail-button"
                     title="닫기"
@@ -2413,7 +2413,7 @@ function AuthenticatedApp() {
                   <div className="todo-details-section">
                     <div className="detail-item">
                       <label>📎 자료 업로드</label>
-                      
+
                       {/* 통합 업로드 존 - 파일 + 링크 */}
                       <div className="resource-upload-container">
                         <div className="link-input-section">
@@ -2435,7 +2435,7 @@ function AuthenticatedApp() {
                           </button>
                         </div>
 
-                        <div 
+                        <div
                           className={`resource-upload-zone ${isDragOver ? 'drag-over' : ''} ${((uploadedFiles[selectedTodo.id]?.length || 0) > 0 || (uploadedLinks[selectedTodo.id]?.length || 0) > 0) ? 'has-files' : ''}`}
                           onDragOver={handleResourceDragOver}
                           onDragLeave={handleResourceDragLeave}
@@ -2444,7 +2444,7 @@ function AuthenticatedApp() {
                         >
                           {((uploadedFiles[selectedTodo.id]?.length || 0) === 0 && (uploadedLinks[selectedTodo.id]?.length || 0) === 0) ? (
                             // 업로드된 자료가 없을 때 - 기본 메시지
-                            <>
+                            <div>
                               <div className="upload-icon">📎</div>
                               <p className="upload-text">
                                 <strong>파일을 드래그하거나 링크를 붙여넣기</strong>
@@ -2452,7 +2452,7 @@ function AuthenticatedApp() {
                               <p className="upload-hint">
                                 파일: PDF, DOC, TXT, 이미지 | 링크: URL 드래그 또는 위에 입력
                               </p>
-                            </>
+                            </div>
                           ) : (
                             // 업로드된 자료가 있을 때 - 자료 리스트 표시
                             <div className="uploaded-resources-inline">
@@ -2643,7 +2643,7 @@ function AuthenticatedApp() {
                   </div>
                 </div>
               </div>
-            </>
+            </div>
           ) : (
             <div className="detail-empty">
               <div className="detail-header">
