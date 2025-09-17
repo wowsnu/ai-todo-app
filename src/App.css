@@ -3998,11 +3998,13 @@ h1 {
 
 /* AI 로딩 인터페이스 */
 .ai-loading-container {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #fde2c7 0%, #fec89a 50%, #ff9b71 100%);
   border-radius: 12px;
   padding: 20px;
   margin-top: 15px;
-  color: white;
+  color: #2c3e50;
+  border: 1px solid rgba(255, 155, 113, 0.3);
+  box-shadow: 0 4px 15px rgba(255, 155, 113, 0.2);
   animation: loadingPulse 2s ease-in-out infinite;
 }
 
