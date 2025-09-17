@@ -200,6 +200,7 @@ function AuthenticatedApp() {
   
   // AI 분석 관련 상태
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [loadingStep, setLoadingStep] = useState(0);
   const [, setAnalysisResult] = useState<TaskAnalysis | null>(null);
   const [, setAnalysisError] = useState<string | null>(null);
   const [aiRequirements, setAiRequirements] = useState(''); // 요구사항 입력
@@ -1368,6 +1369,7 @@ function AuthenticatedApp() {
     if (!selectedTodo) return;
 
     setIsAnalyzing(true);
+    setLoadingStep(0);
     setAnalysisError(null);
     setAnalysisResult(null);
 
@@ -1376,6 +1378,11 @@ function AuthenticatedApp() {
       if (!aiService.isConfigured()) {
         throw new Error('OpenAI API 키가 설정되지 않았습니다. .env 파일을 확인해주세요.');
       }
+
+      // 단계별 로딩 시뮬레이션
+      setTimeout(() => setLoadingStep(1), 1000);
+      setTimeout(() => setLoadingStep(2), 2500);
+      setTimeout(() => setLoadingStep(3), 4000);
 
       // AI 분석 실행 - 현재 선택된 태스크의 파일들과 사용자 설정 사용
       const analysis = await aiService.analyzeTask(
@@ -1472,6 +1479,7 @@ function AuthenticatedApp() {
       setAnalysisError(error instanceof Error ? error.message : 'AI 분석 중 오류가 발생했습니다.');
     } finally {
       setIsAnalyzing(false);
+      setLoadingStep(0);
     }
   };
 
@@ -2116,10 +2124,6 @@ function AuthenticatedApp() {
               <div className="header-content">
                 <div className="header-text">
                   <h1>Todooby</h1>
-                  <p className="todooby-greeting"> 두비두밥~ 나는 투두비야! 너의 일을 차근차근 도와줄게! </p>
-                </div>
-                <div className="todooby-character">
-                  <img src="/todooby.png" alt="Todooby" className="todooby-image" />
                 </div>
               </div>
             </div>
@@ -2523,14 +2527,37 @@ function AuthenticatedApp() {
                         </div>
 
                         {/* 투두비 분석 버튼 */}
-                        <button 
-                          className="todooby-analyze-btn-bottom"
-                          onClick={handleTodoAnalysis}
-                          disabled={isAnalyzing || !selectedTodo}
-                        >
-                          <img src="/analytics-panda.png" alt="분석 팬더" className="panda-icon" />
-                          {isAnalyzing ? '분석 중...' : '투두비 분석'}
-                        </button>
+                        {!isAnalyzing ? (
+                          <button
+                            className="todooby-analyze-btn-bottom"
+                            onClick={handleTodoAnalysis}
+                            disabled={!selectedTodo}
+                          >
+                            <img src="/analytics-panda.png" alt="분석 팬더" className="panda-icon" />
+                            투두비 분석
+                          </button>
+                        ) : (
+                          <div className="ai-loading-container">
+                            <div className="loading-header">
+                              <img src="/analytics-panda.png" alt="분석 팬더" className="panda-icon analyzing" />
+                              <span className="loading-title">AI 분석 중...</span>
+                            </div>
+                            <div className="loading-progress">
+                              <div className="progress-bar">
+                                <div className="progress-fill"></div>
+                              </div>
+                              <div className="loading-steps">
+                                <div className={`step ${loadingStep >= 0 ? 'active' : ''}`}>🧠 작업 내용 분석</div>
+                                <div className={`step ${loadingStep >= 1 ? 'active' : ''}`}>📋 서브태스크 생성</div>
+                                <div className={`step ${loadingStep >= 2 ? 'active' : ''}`}>⏱️ 시간 예측</div>
+                                <div className={`step ${loadingStep >= 3 ? 'active' : ''}`}>✨ 최적화</div>
+                              </div>
+                            </div>
+                            <div className="loading-tip">
+                              💡 팁: 복잡한 작업일수록 더 정확한 분석이 가능해요!
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                     
@@ -2559,27 +2586,51 @@ function AuthenticatedApp() {
                         </div>
                         
                         <div className="subtasks-for-main-task">
-                          {subtasks
-                            .filter(subtask => subtask.parentMainTaskId === selectedTodo.id)
-                            .map((subtask) => (
-                              <div key={subtask.id} className="subtask-preview">
-                                <div className="subtask-info">
-                                  <span className="subtask-text">{subtask.text}</span>
-                                  <span className="subtask-time">📅 {subtask.date && new Date(subtask.date).toLocaleDateString('ko-KR', { 
-                                    month: 'short', 
-                                    day: 'numeric' 
-                                  })} {subtask.time}</span>
+                          <div className="subtask-flowchart">
+                            {subtasks
+                              .filter(subtask => subtask.parentMainTaskId === selectedTodo.id)
+                              .map((subtask, index, array) => (
+                                <div key={subtask.id} className="flowchart-item">
+                                  <div
+                                    className="subtask-card-mini"
+                                    style={{
+                                      animationDelay: `${index * 0.3}s`
+                                    }}
+                                  >
+                                    <div className="subtask-mini-content">
+                                      <div className="subtask-mini-text">{subtask.text}</div>
+                                      <div className="subtask-mini-meta">
+                                        <span className="mini-date-badge">📅 {subtask.date && new Date(subtask.date).toLocaleDateString('ko-KR', {
+                                          month: 'short',
+                                          day: 'numeric'
+                                        })}</span>
+                                        <span className="mini-time-badge">🕐 {subtask.time}</span>
+                                        <span className="mini-duration-badge">⏱️ {subtask.estimatedDuration || 30}분</span>
+                                      </div>
+                                    </div>
+                                    <button
+                                      onClick={() => removeSubtaskFromMainTask(subtask.id)}
+                                      className="subtask-remove-btn-mini"
+                                      title="제거"
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+                                  {index < array.length - 1 && (
+                                    <div
+                                      className="flowchart-connector"
+                                      style={{
+                                        animationDelay: `${index * 0.3 + 0.2}s`
+                                      }}
+                                    >
+                                      <div className="connector-line"></div>
+                                      <div className="connector-arrow">↓</div>
+                                    </div>
+                                  )}
                                 </div>
-                                <button
-                                  onClick={() => removeSubtaskFromMainTask(subtask.id)}
-                                  className="subtask-remove-btn"
-                                  title="제거"
-                                >
-                                  ✕
-                                </button>
-                              </div>
-                            ))
-                          }
+                              ))
+                            }
+                          </div>
                           
                           {subtasks.filter(subtask => subtask.parentMainTaskId === selectedTodo.id).length === 0 && (
                             <div className="no-subtasks">
@@ -2600,6 +2651,9 @@ function AuthenticatedApp() {
                 <p>할일을 선택하여 자세한 정보를 확인하세요</p>
               </div>
               <div className="detail-content">
+                <div className="todooby-character-right">
+                  <img src="/todooby.png" alt="Todooby" className="todooby-image" />
+                </div>
                 <div className="detail-placeholder">
                   할일을 클릭하면 상세 정보가 나타납니다
                 </div>
